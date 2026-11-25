@@ -146,7 +146,7 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     }
     window.addEventListener("scroll", updateOffset);
 
-   // Approche WPS Word : accompagnement doux du focus centré sur le curseur
+     // Accompagnement doux type WPS Word : ne déplace pas la feuille si elle est déjà visible
     const onFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest(".home-ai-sheet")) {
@@ -155,12 +155,16 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
           const node = selection?.anchorNode;
           const element = (node?.nodeType === 1 ? node : node?.parentElement) as HTMLElement | null;
           if (element && deskRef.current?.contains(element)) {
-            element.scrollIntoView({ block: "nearest", behavior: "smooth" }); 
+            const rect = element.getBoundingClientRect();
+            // N'ajuste délicatement que si le curseur sort de l'écran visible
+            if (rect.top < 70 || rect.bottom > window.innerHeight - 70) {
+              element.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
           }
-        }, 100);
+        }, 120);
       }
     };    
-
+  
     const onFocusOut = () => {
       setTimeout(updateOffset, 150);
     };
