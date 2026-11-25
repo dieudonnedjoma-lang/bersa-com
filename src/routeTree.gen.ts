@@ -18,10 +18,13 @@ import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as BibliothequeRouteImport } from './routes/bibliotheque'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CvStudioRouteImport } from './routes/cv-studio'
+import { Route as DocumentViewerRouteImport } from './routes/document-viewer'
 import { Route as DocumentsRouteImport } from './routes/documents'
 import { Route as FormationsRouteImport } from './routes/formations'
 import { Route as GestionRouteImport } from './routes/gestion'
+import { Route as LettresRouteImport } from './routes/lettres'
 import { Route as ModelesRouteImport } from './routes/modeles'
+import { Route as ModelesProRouteImport } from './routes/modeles-pro'
 import { Route as OpportunitesRouteImport } from './routes/opportunites'
 import { Route as ParametresRouteImport } from './routes/parametres'
 import { Route as ProfilRouteImport } from './routes/profil'
@@ -77,6 +80,11 @@ const CvStudioRoute = CvStudioRouteImport.update({
   path: '/cv-studio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocumentViewerRoute = DocumentViewerRouteImport.update({
+  id: '/document-viewer',
+  path: '/document-viewer',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocumentsRoute = DocumentsRouteImport.update({
   id: '/documents',
   path: '/documents',
@@ -92,9 +100,19 @@ const GestionRoute = GestionRouteImport.update({
   path: '/gestion',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LettresRoute = LettresRouteImport.update({
+  id: '/lettres',
+  path: '/lettres',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModelesRoute = ModelesRouteImport.update({
   id: '/modeles',
   path: '/modeles',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModelesProRoute = ModelesProRouteImport.update({
+  id: '/modeles-pro',
+  path: '/modeles-pro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpportunitesRoute = OpportunitesRouteImport.update({
@@ -153,10 +171,13 @@ export interface FileRoutesByFullPath {
   '/bibliotheque': typeof BibliothequeRoute
   '/contact': typeof ContactRoute
   '/cv-studio': typeof CvStudioRoute
+  '/document-viewer': typeof DocumentViewerRoute
   '/documents': typeof DocumentsRoute
   '/formations': typeof FormationsRoute
   '/gestion': typeof GestionRoute
+  '/lettres': typeof LettresRoute
   '/modeles': typeof ModelesRoute
+  '/modeles-pro': typeof ModelesProRoute
   '/opportunites': typeof OpportunitesRoute
   '/parametres': typeof ParametresRoute
   '/profil': typeof ProfilRoute
@@ -177,10 +198,13 @@ export interface FileRoutesByTo {
   '/bibliotheque': typeof BibliothequeRoute
   '/contact': typeof ContactRoute
   '/cv-studio': typeof CvStudioRoute
+  '/document-viewer': typeof DocumentViewerRoute
   '/documents': typeof DocumentsRoute
   '/formations': typeof FormationsRoute
   '/gestion': typeof GestionRoute
+  '/lettres': typeof LettresRoute
   '/modeles': typeof ModelesRoute
+  '/modeles-pro': typeof ModelesProRoute
   '/opportunites': typeof OpportunitesRoute
   '/parametres': typeof ParametresRoute
   '/profil': typeof ProfilRoute
@@ -202,10 +226,13 @@ export interface FileRoutesById {
   '/bibliotheque': typeof BibliothequeRoute
   '/contact': typeof ContactRoute
   '/cv-studio': typeof CvStudioRoute
+  '/document-viewer': typeof DocumentViewerRoute
   '/documents': typeof DocumentsRoute
   '/formations': typeof FormationsRoute
   '/gestion': typeof GestionRoute
+  '/lettres': typeof LettresRoute
   '/modeles': typeof ModelesRoute
+  '/modeles-pro': typeof ModelesProRoute
   '/opportunites': typeof OpportunitesRoute
   '/parametres': typeof ParametresRoute
   '/profil': typeof ProfilRoute
@@ -228,10 +255,13 @@ export interface FileRouteTypes {
     | '/bibliotheque'
     | '/contact'
     | '/cv-studio'
+    | '/document-viewer'
     | '/documents'
     | '/formations'
     | '/gestion'
+    | '/lettres'
     | '/modeles'
+    | '/modeles-pro'
     | '/opportunites'
     | '/parametres'
     | '/profil'
@@ -252,10 +282,13 @@ export interface FileRouteTypes {
     | '/bibliotheque'
     | '/contact'
     | '/cv-studio'
+    | '/document-viewer'
     | '/documents'
     | '/formations'
     | '/gestion'
+    | '/lettres'
     | '/modeles'
+    | '/modeles-pro'
     | '/opportunites'
     | '/parametres'
     | '/profil'
@@ -276,10 +309,13 @@ export interface FileRouteTypes {
     | '/bibliotheque'
     | '/contact'
     | '/cv-studio'
+    | '/document-viewer'
     | '/documents'
     | '/formations'
     | '/gestion'
+    | '/lettres'
     | '/modeles'
+    | '/modeles-pro'
     | '/opportunites'
     | '/parametres'
     | '/profil'
@@ -301,10 +337,13 @@ export interface RootRouteChildren {
   BibliothequeRoute: typeof BibliothequeRoute
   ContactRoute: typeof ContactRoute
   CvStudioRoute: typeof CvStudioRoute
+  DocumentViewerRoute: typeof DocumentViewerRoute
   DocumentsRoute: typeof DocumentsRoute
   FormationsRoute: typeof FormationsRoute
   GestionRoute: typeof GestionRoute
+  LettresRoute: typeof LettresRoute
   ModelesRoute: typeof ModelesRoute
+  ModelesProRoute: typeof ModelesProRoute
   OpportunitesRoute: typeof OpportunitesRoute
   ParametresRoute: typeof ParametresRoute
   ProfilRoute: typeof ProfilRoute
@@ -381,6 +420,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CvStudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/document-viewer': {
+      id: '/document-viewer'
+      path: '/document-viewer'
+      fullPath: '/document-viewer'
+      preLoaderRoute: typeof DocumentViewerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/documents': {
       id: '/documents'
       path: '/documents'
@@ -402,11 +448,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lettres': {
+      id: '/lettres'
+      path: '/lettres'
+      fullPath: '/lettres'
+      preLoaderRoute: typeof LettresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/modeles': {
       id: '/modeles'
       path: '/modeles'
       fullPath: '/modeles'
       preLoaderRoute: typeof ModelesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modeles-pro': {
+      id: '/modeles-pro'
+      path: '/modeles-pro'
+      fullPath: '/modeles-pro'
+      preLoaderRoute: typeof ModelesProRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/opportunites': {
@@ -485,10 +545,13 @@ const rootRouteChildren: RootRouteChildren = {
   BibliothequeRoute: BibliothequeRoute,
   ContactRoute: ContactRoute,
   CvStudioRoute: CvStudioRoute,
+  DocumentViewerRoute: DocumentViewerRoute,
   DocumentsRoute: DocumentsRoute,
   FormationsRoute: FormationsRoute,
   GestionRoute: GestionRoute,
+  LettresRoute: LettresRoute,
   ModelesRoute: ModelesRoute,
+  ModelesProRoute: ModelesProRoute,
   OpportunitesRoute: OpportunitesRoute,
   ParametresRoute: ParametresRoute,
   ProfilRoute: ProfilRoute,

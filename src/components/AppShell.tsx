@@ -12,9 +12,19 @@ import {
   Settings,
   ShieldAlert,
   Menu,
-  ArrowLeft,
+  Save, 
+  Download, 
+  FilePlus, 
+  FolderOpen, 
+  Pencil, 
+  Share2, 
+  Copy, 
+  Trash2, 
+  Printer,
+  FileDown, 
+  FileCode, 
+  Globe
 } from "lucide-react";
-import logo from "@/assets/bersa-logo.png.asset.json";
 import { AuthGate } from "@/components/AuthGate";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,9 +34,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { BackGlyph } from "@/components/BackGlyph";
 interface MenuItem {
   to: string;
   label: string;
@@ -46,7 +60,35 @@ const menuItems: MenuItem[] = [
   { to: "/parametres", label: "Paramètres", icon: Settings },
   { to: "/gestion", label: "Gestion", icon: ShieldCheck, adminOnly: true },
 ];
-export function AppShell({ children }: { children: ReactNode }) {
+
+export interface DocumentMenuActions {
+  onSave?: () => void;
+  onSaveAs?: () => void;
+  onSaveAsWord?: () => void;
+  onSaveAsPdf?: () => void;
+  onSaveAsTxt?: () => void;
+  onSaveAsHtml?: () => void;
+  onNewDoc?: () => void;
+  onOpenFile?: () => void;
+  onRename?: () => void;
+  onShare?: () => void;
+  onDuplicate?: () => void;
+  onDelete?: () => void;
+}
+
+export function AppShell({
+  children,
+  minimal = false,
+  title,
+  onTitleChange,
+  documentActions,
+}: {
+  children: ReactNode;
+  minimal?: boolean;
+  title?: string;
+  onTitleChange?: (val: string) => void;
+  documentActions?: DocumentMenuActions;
+}) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -70,16 +112,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <AuthGate>
       <div className="min-h-screen">
-        {/* En-tête épuré plein écran : Retour + Logo à gauche | Menu ☰ à droite */}
-        <header className="sticky top-0 z-30 bg-[#0a192f] text-white shadow-sm">
-          <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-2 sm:px-4">
+        {/* En-tête épuré plein écran : Sur Rédaction, Retour + Titre du document | Normal ailleurs */}
+        <header className={`sticky top-0 z-30 bg-[#0a192f] text-white shadow-sm ${minimal ? "h-10" : ""}`}>
+          <div className={`mx-auto flex max-w-7xl items-center justify-between px-2 sm:px-4 ${minimal ? "h-10" : "h-12"}`}>
             
-            {/* GAUCHE : Bouton retour ← + Logo officiel BERSA */}
-            <div className="flex items-center gap-2">
+            {/* GAUCHE : Bouton retour ← + Titre ou Logo */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 text-white hover:bg-white/10 rounded-full shrink-0"
+                className="h-8 w-8 text-white hover:bg-white/10 rounded-full shrink-0"
                 title="Retour"
                 aria-label="Retour"
                 onClick={() => {
@@ -88,24 +130,39 @@ export function AppShell({ children }: { children: ReactNode }) {
                   else void navigate({ to: "/", replace: true });
                 }}
               >
-                <ArrowLeft className="h-5 w-5" />
+                <BackGlyph className="h-5 w-5" />
               </Button>
 
-              <Link to="/" className="flex items-center gap-2 min-w-0">
-                <img
-                  src={logo.url}
-                  alt="Logo BERSA"
-                  className="h-8 w-8 rounded-lg shadow-xs bg-white p-0.5 object-contain shrink-0"
-                />
-                <div className="flex flex-col leading-none">
-                  <span className="font-serif text-lg font-black tracking-tight text-white">
-                    BERSA
-                  </span>
-                  <span className="text-[10px] font-semibold text-amber-400">
-                    Berceau du Savoir
-                  </span>
+              {minimal ? (
+                /* Espace discret affichant le titre du document */
+                <div className="flex items-center gap-1.5 flex-1 max-w-xs sm:max-w-sm min-w-0 px-2 py-0.5 rounded bg-white/10 text-white text-xs">
+                  <FileText className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={title ?? "Mon_Document_BERSA"}
+                    onChange={(e) => onTitleChange?.(e.target.value)}
+                    placeholder="Titre du document..."
+                    className="bg-transparent border-none outline-none text-white text-xs font-medium w-full truncate placeholder:text-white/40"
+                    title="Titre du document (cliquez pour modifier)"
+                  />
                 </div>
-              </Link>
+              ) : (
+                <Link to="/" className="flex items-center gap-2 min-w-0">
+                  <img
+                    src="/logo.png"
+                    alt="Logo BERSA"
+                    className="h-8 w-8 rounded-lg shadow-xs bg-white p-0.5 object-contain shrink-0"
+                  />
+                  <div className="flex flex-col leading-none">
+                    <span className="font-serif text-lg font-black tracking-tight text-white">
+                      BERSA
+                    </span>
+                    <span className="text-[10px] font-semibold text-amber-400">
+                      Berceau du Savoir
+                    </span>
+                  </div>
+                </Link>
+              )}
             </div>
 
             {/* DROITE : Bouton unique à 3 lignes ☰ avec les 8 fonctionnalités */}
@@ -122,7 +179,75 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={6} className="w-64 p-2 bg-white text-slate-900 shadow-xl border border-slate-200 rounded-xl">
+                <DropdownMenuContent align="end" sideOffset={6} className="w-[min(16rem,calc(100vw-1rem))] max-h-[calc(100dvh-4rem)] overflow-y-auto p-2 bg-white text-slate-900 shadow-xl border border-slate-200 rounded-xl">
+                  {/* Actions du document actif (comme dans les 3 points des documents récents) */}
+                  {documentActions && (
+                    <>
+                      <DropdownMenuLabel className="font-serif text-xs font-bold text-[#0a192f] uppercase tracking-wider px-2 py-1 flex items-center justify-between">
+                        <span>Options Document</span>
+                        <span className="text-[10px] text-amber-600 font-sans font-semibold">Atelier</span>
+                      </DropdownMenuLabel>
+
+                      {documentActions.onSave && (
+                        <DropdownMenuItem onClick={documentActions.onSave} className="flex items-center gap-2.5 py-2 font-semibold text-blue-950 cursor-pointer hover:bg-blue-50 rounded-lg">
+                          <Save className="h-4 w-4 text-blue-800" />
+                          <span>Enregistrer</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      {documentActions.onSaveAs && (
+                        <DropdownMenuItem onClick={documentActions.onSaveAs} className="flex items-center gap-2.5 py-2 font-medium cursor-pointer hover:bg-slate-100 rounded-lg">
+                          <Download className="h-4 w-4 text-slate-700" />
+                          <span>Enregistrer sous… (Word, PDF, Texte)</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      {documentActions.onNewDoc && (
+                        <DropdownMenuItem onClick={documentActions.onNewDoc} className="flex items-center gap-2.5 py-2 cursor-pointer hover:bg-slate-100 rounded-lg">
+                          <FilePlus className="h-4 w-4 text-slate-700" />
+                          <span>Nouveau document</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      {documentActions.onOpenFile && (
+                        <DropdownMenuItem onClick={documentActions.onOpenFile} className="flex items-center gap-2.5 py-2 cursor-pointer hover:bg-slate-100 rounded-lg">
+                          <FolderOpen className="h-4 w-4 text-slate-700" />
+                          <span>Ouvrir un fichier…</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      {documentActions.onRename && (
+                        <DropdownMenuItem onClick={documentActions.onRename} className="flex items-center gap-2.5 py-2 cursor-pointer hover:bg-slate-100 rounded-lg">
+                          <Pencil className="h-4 w-4 text-slate-700" />
+                          <span>Renommer</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      {documentActions.onShare && (
+                        <DropdownMenuItem onClick={documentActions.onShare} className="flex items-center gap-2.5 py-2 cursor-pointer hover:bg-slate-100 rounded-lg">
+                          <Share2 className="h-4 w-4 text-slate-700" />
+                          <span>Partager…</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      {documentActions.onDuplicate && (
+                        <DropdownMenuItem onClick={documentActions.onDuplicate} className="flex items-center gap-2.5 py-2 cursor-pointer hover:bg-slate-100 rounded-lg">
+                          <Copy className="h-4 w-4 text-slate-700" />
+                          <span>Dupliquer</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      {documentActions.onDelete && (
+                        <DropdownMenuItem onClick={documentActions.onDelete} className="flex items-center gap-2.5 py-2 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer">
+                          <Trash2 className="h-4 w-4 text-rose-600" />
+                          <span>Effacer le contenu</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
                   <DropdownMenuLabel className="font-serif text-sm font-bold text-[#0a192f] px-2 py-1">
                     Services BERSA
                   </DropdownMenuLabel>

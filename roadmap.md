@@ -1,4 +1,36 @@
 # BERSA roadmap (reconstruction)
+## Finalisation CV, atelier et Google
+- [ ] CV : étapes guidées, aperçu après finalisation, stages avec début/fin, typographie et couleurs compactes
+- [ ] Enregistrement local et exports réels CV / rédaction, avec sélecteur système si disponible
+- [ ] Atelier : zoom adapté = 100 %, notes ancrées, interligne et commandes cohérents
+- [ ] Google : activer et vérifier la connexion gérée ; adresse Cloudflare externe en attente
+- [ ] Tests ciblés, parcours mobile et sauvegarde GitHub
+## Demande actuelle : BERSA Writer CV
+- [ ] Intégrer personnalisation, champs, rubriques et aperçu mobile sans modifier les modèles existants
+- [ ] Placer les commandes de sauvegarde et téléchargement au-dessus et en dessous de l’aperçu
+- [ ] Mettre le modèle sans photo en septième position et l’exclure du diaporama de cinq secondes
+- [ ] Tester saisie, sauvegarde, export et vérifier les deux alertes de lecture de fichiers
+## Current request: workshop opening fit and visible controls
+- [ ] Fit real workshop text to screen on opening without changing document margins
+- [ ] Expose revision/reference tabs and fit reset; correct orientation geometry and zoom limits
+- [ ] Test signed-in opening, editing and controls at mobile widths
+## Current request: independent mobile DocumentViewer
+- [x] Create typed A4 block pagination, page footnotes and scoped WPS-style reader
+- [x] Implement fit-to-text, anchored pinch, double tap and inertial pan
+- [x] Verify example and controls at 360px–430px without changing existing pages — browser Pointer Events tested; physical phone gestures not verified
+## Current request: secure Gemini and Groq services
+- [x] Connect Gemini securely and verify both provider credentials without exposing values
+- [x] Wire Gemini writing and Groq audio transcription in server-only authenticated flows
+- [x] Verify connected workshop generation and audio transcription with real input
+- [ ] Restore native Gemini Google-search grounding through bearer-compatible connection (current compatibility endpoint rejects the search tool)
+## Demande actuelle : commandes des captures et marges internes
+- [x] Ruban sur une seule ligne défilante, espacement compact et outils courants prioritaires — vérifié à 360px
+- [ ] Remplacer Accueil / Insérer par les outils des captures sans doublons
+- [ ] Placer en-têtes, pieds et notes dans la surface blanche de chaque page
+- [ ] Vérifier les commandes sur document réel, téléphone et exports
+- [x] Vérifier saisie, gras, taille, interligne, notes renumérotées, marges internes, saut de page et téléchargement PDF à 360px et sur ordinateur
+- [x] Corriger insertion de fichier au curseur, conservation des notes et options de première page/numérotation DOCX
+- [ ] Essayer séparément scanner, signature, colonnes, toutes les commandes de tableau et exports de documents longs
 ## Corrections demandées, dans l’ordre
 - [x] Accueil : recherche, photo reliée au profil, quatre cartes, catalogue et menus des documents
 - [x] CV : aperçus ajustés, vignettes compactes, sauvegarde locale vérifiée à 360px
@@ -60,3 +92,8 @@
 - [x] Open real recent documents and import device Word/PDF content
 - [x] Automatic page separators and mobile workspace sizing
 - [ ] Verify signed-in home → editor → import and back, and template publication
+## Demande actuelle : Assistant, Word, CV, bouton retour
+- [x] Assistant : plus de recherche web forcée (quota 429), essai de plusieurs modèles gratuits — vérifié avec la clé gratuite
+- [x] Atelier Word remis comme avant le changement de pagination d'hier
+- [x] CV : écran d'enregistrement avec choix du format puis du dossier — vérifié à 360px (téléchargement Word)
+- [x] Bouton retour « ❮ » partout où il y a un retour

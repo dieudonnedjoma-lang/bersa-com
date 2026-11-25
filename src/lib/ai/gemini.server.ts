@@ -2,7 +2,14 @@
 export type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
 export type GeminiContent = { role: "user" | "model"; parts: GeminiPart[] };
 
-const MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-2.5-flash"];
+// Modèles officiels actifs sur Google Gemini v1beta
+const MODELS = [
+  "gemini-flash-lite-latest",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.5-flash-lite",
+  "gemini-3-flash-preview",
+];
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 export class GeminiError extends Error {
@@ -10,40 +17,64 @@ export class GeminiError extends Error {
 }
 
 function apiKey() {
+  const connection = process.env["UDC_GEMINI_BERSA_API_KEY"];
+  const gateway = process.env["LOVABLE_API_KEY"];
+  if (connection && gateway) {
+    return { base: "https://connector-gateway.lovable.dev/udc_gemini_bersa/v1beta/openai", gateway: true, headers: { Authorization: `Bearer ${gateway}`, "X-Connection-Api-Key": connection } };
+  }
   const key = process.env["GEMINI_API_KEY"];
   if (!key) throw new GeminiError("Assistant non configuré.", 503);
-  return key;
+  return { base: BASE, gateway: false, headers: { "x-goog-api-key": key } };
 }
 
 async function failure(res: Response) {
   let message = `Assistant indisponible (${res.status}).`;
-  try { const b = await res.json(); message = b?.error?.message ?? message; } catch { /* keep */ }
-  if (res.status === 429) message = "Limite gratuite de l’IA atteinte, réessayez dans un instant.";
+  // Provider errors can contain credentials; never forward their raw bodies.
+  if (res.status === 429) message = "L’assistant est très sollicité, réessayez dans une minute.";
   return new GeminiError(message, res.status);
 }
 
 function body(contents: GeminiContent[], system?: string) {
+  // Google Search grounding is not sent: on free keys it has a tiny separate quota and returned 429 for every request.
   return JSON.stringify({
     contents,
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    generationConfig: { temperature: 0.7, maxOutputTokens: 65536 },
   });
 }
 
+const RETRYABLE = new Set([400, 404, 429, 500, 502, 503, 504]);
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function* geminiStream(contents: GeminiContent[], system?: string, signal?: AbortSignal) {
-  const key = apiKey();
+  const connection = apiKey();
   let res: Response | null = null;
   let lastError: GeminiError | null = null;
-  for (const model of MODELS) {
-    res = await fetch(`${BASE}/${model}:streamGenerateContent?alt=sse`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: body(contents, system),
-      ...(signal ? { signal } : {}),
-    });
-    if (res.ok && res.body) break;
-    lastError = await failure(res);
-    res = null;
-    if (lastError.status !== 503 && lastError.status !== 429 && lastError.status !== 400) throw lastError;
+  // Two passes: per-minute free limits usually clear after a short pause.
+  outer: for (let pass = 0; pass < 2; pass++) {
+    if (pass > 0) { if (lastError?.status !== 429) break; await wait(2500); }
+    for (const model of MODELS) {
+      try {
+        res = await fetch(connection.gateway ? `${connection.base}/chat/completions` : `${connection.base}/${model}:streamGenerateContent?alt=sse`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...connection.headers },
+          body: connection.gateway ? JSON.stringify({ model, stream: true, temperature: 0.7, max_tokens: 65536,
+            messages: [ ...(system ? [{ role: "system", content: system }] : []), ...contents.map(c => ({ role: c.role === "model" ? "assistant" : "user", content: c.parts.map(p => "text" in p ? { type: "text", text: p.text } : { type: "image_url", image_url: { url: `data:${p.inline_data.mime_type};base64,${p.inline_data.data}` } }) })) ],
+          }) : body(contents, system),
+          ...(signal ? { signal } : {}),
+        });
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        lastError = new GeminiError("Assistant momentanément injoignable.", 503);
+        res = null;
+        continue;
+      }
+      if (res.ok && res.body) break outer;
+      lastError = await failure(res);
+      await res.body?.cancel().catch(() => {});
+      res = null;
+      if (!RETRYABLE.has(lastError.status)) throw lastError;
+    }
   }
   if (!res || !res.body) throw lastError ?? new GeminiError("Assistant indisponible.", 503);
   const reader = res.body.getReader();
@@ -59,7 +90,7 @@ export async function* geminiStream(contents: GeminiContent[], system?: string, 
       if (!line.startsWith("data:")) continue;
       try {
         const ev = JSON.parse(line.slice(5).trim());
-        const text = (ev?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("");
+        const text = connection.gateway ? ev?.choices?.[0]?.delta?.content ?? "" : (ev?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("");
         if (text) yield text;
       } catch { /* ignore partial */ }
     }

@@ -35,14 +35,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { renderCvHtml, sampleCvFor } from "@/lib/cv-templates";
+import { CV_SLIDE_INTERVAL, HOME_CV_TEMPLATES } from "@/lib/cv-catalog";
+import { CvPreview } from "@/components/CvPreview";
+
+const HOME_CV_SLIDES = HOME_CV_TEMPLATES.map(t => renderCvHtml(t, sampleCvFor(t)));
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { queueDocumentFile } from "@/lib/document-import";
 import { HomeDocActions } from "@/components/HomeDocActions";
 import { signedCommunity } from "@/lib/community";
+import { LETTER_TEMPLATES, letterPrompt, letterSheet } from "@/lib/letter-templates";
+import { DOC_TEMPLATES } from "@/lib/doc-templates";
 import { homeCards, TEMPLATE_DOMAINS, templateDomain } from "@/lib/home-catalog";
-import logo from "@/assets/bersa-logo.png.asset.json";
 
 interface TemplateItem {
   id: string;
@@ -54,6 +60,10 @@ interface TemplateItem {
   content?: string | null;
 }
 
+const HOME_LETTER_SLIDES = LETTER_TEMPLATES.slice(0, 8).map(t => letterSheet(t.html));
+const HOME_DOC_SLIDES = { business: DOC_TEMPLATES.filter(t => t.cat === "business").map(t => letterSheet(t.html)), juridique: DOC_TEMPLATES.filter(t => t.cat === "juridique").map(t => letterSheet(t.html)) };
+const PANEL_BANDS: Record<string, string> = { lettre: "Lettres administratives", business: "Business Plan Pro", juridique: "Documents juridiques" };
+
 const TEMPLATES: TemplateItem[] = [
   {
     id: "lettre",
@@ -61,11 +71,12 @@ const TEMPLATES: TemplateItem[] = [
     icon: FileBadge,
     prompt: "Rédige une lettre administrative officielle respectant les normes professionnelles.",
   },
-  {
+  ...LETTER_TEMPLATES.map(l => ({ id: l.id, label: l.label, icon: FileBadge, prompt: letterPrompt(l), content: l.html })),
+    {
     id: "cv",
-    label: "CV & Motivation",
+    label: "Modèles de CV Pro",
     icon: Briefcase,
-    prompt: "Conçois un CV percutant et une lettre de motivation ciblée.",
+    prompt: "Conçois un CV moderne et percutant dans le Studio CV BERSA.",
   },
   {
     id: "juridique",
@@ -114,6 +125,17 @@ export function Home({ catalog = false }: { catalog?: boolean }) {
   const [filesList, setFilesList] = useState<RecentDoc[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>(TEMPLATES);
+
+    // Diaporama automatique de l'effigie des Modèles CV
+  const [cvSlideIndex, setCvSlideIndex] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCvSlideIndex((prev) => (prev + 1) % HOME_CV_SLIDES.length);
+    }, CV_SLIDE_INTERVAL);
+    return () => clearInterval(timer);
+  }, []);
+  const [docSlide, setDocSlide] = useState(0);
+  useEffect(() => { const t = setInterval(() => setDocSlide(i => i + 1), 6000); return () => clearInterval(t); }, []);
 
   useEffect(() => {
     void supabase.from("document_templates").select("id, title, badge, prompt, content_html").eq("published", true).order("created_at").then(({ data }) => {
@@ -166,6 +188,9 @@ export function Home({ catalog = false }: { catalog?: boolean }) {
   // Ouverture d'un modèle : transmet l'instruction à l'Atelier
   const handleOpenTemplate = (tmpl: TemplateItem) => {
     if (tmpl.id === "cv") { navigate({ to: "/cv-studio" }); return; }
+    if (tmpl.id === "business" || tmpl.id === "juridique") { navigate({ to: "/modeles-pro", search: { cat: tmpl.id } }); return; }
+    if (tmpl.id === "lettre" || LETTER_TEMPLATES.some(l => l.id === tmpl.id)) { navigate({ to: "/lettres" }); return; }
+    if (tmpl.content && tmpl.prompt) sessionStorage.setItem("bersa-assistant-prompt", tmpl.prompt);
     if (tmpl.content) {
       sessionStorage.setItem("bersa-document-html", tmpl.content);
       sessionStorage.setItem("bersa-document-title", tmpl.label);
@@ -190,7 +215,7 @@ export function Home({ catalog = false }: { catalog?: boolean }) {
 
   const orderedTemplates = [...templates].sort((a,b) => TEMPLATE_DOMAINS.indexOf(templateDomain(a.label)) - TEMPLATE_DOMAINS.indexOf(templateDomain(b.label)));
   const matchingTemplates = orderedTemplates.filter(t => t.label.toLowerCase().includes(searchQuery.toLowerCase()) && (domain === "Tous" || templateDomain(t.label) === domain));
-  const displayedTemplates = catalog ? matchingTemplates : homeCards(matchingTemplates);
+  const displayedTemplates = catalog ? matchingTemplates : homeCards(matchingTemplates.filter(t => !LETTER_TEMPLATES.some(l => l.id === t.id)));
   const filteredFiles = filesList.filter((f) =>
     f.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -201,7 +226,7 @@ export function Home({ catalog = false }: { catalog?: boolean }) {
       <header className="px-3 pt-3 pb-2 flex items-center gap-2">
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <img
-            src={logo.url}
+            src="/logo.png"
             alt="Logo officiel BERSA"
             className="w-9 h-9 object-contain rounded-lg shadow-xs"
           />
@@ -352,22 +377,55 @@ export function Home({ catalog = false }: { catalog?: boolean }) {
                 key={tmpl.id}
                 variant="ghost"
                 onClick={() => handleOpenTemplate(tmpl)}
-                className="relative h-28 min-w-0 overflow-hidden flex flex-col justify-between items-start gap-1 rounded-2xl p-2.5 whitespace-normal bg-gradient-to-br from-[#0A2342] via-[#0F325E] to-[#0A1D36] text-white shadow-[0_6px_20px_rgba(10,35,66,0.22)] hover:shadow-xl hover:-translate-y-0.5 transition-all border border-white/10 ring-1 ring-gold/20"
+                className={
+                  (tmpl.id in PANEL_BANDS || tmpl.id === "cv")
+                    ? "group relative h-28 min-w-0 overflow-hidden rounded-2xl p-0 whitespace-normal bg-white shadow-[0_6px_20px_rgba(10,35,66,0.25)] hover:shadow-xl hover:-translate-y-0.5 transition-all border border-gold/40 ring-1 ring-gold/30 flex flex-col text-left"
+                    : "relative h-28 min-w-0 overflow-hidden flex flex-col justify-between items-start gap-1 rounded-2xl p-2.5 whitespace-normal bg-gradient-to-br from-[#0A2342] via-[#0F325E] to-[#0A1D36] text-white shadow-[0_6px_20px_rgba(10,35,66,0.22)] hover:shadow-xl hover:-translate-y-0.5 transition-all border border-white/10 ring-1 ring-gold/20"
+                }
               >
-                <span className="absolute -right-3 -top-3 size-12 rounded-full bg-gradient-to-br from-gold/30 to-transparent pointer-events-none" />
-                <span className="grid size-9 place-items-center rounded-xl bg-white/10 ring-1 ring-gold/40 shadow-xs">
-                  <Icon className="size-5 text-gold" />
-                </span>
-                <span className="w-full text-left text-[11px] font-bold leading-tight line-clamp-2 text-white">
-                  {tmpl.label}
-                </span>
-                <span className="text-[8px] uppercase tracking-wider font-semibold text-gold/90">
-                  {templateDomain(tmpl.label)}
-                </span>
+                {tmpl.id === "cv" ? (
+                  <div className="relative size-full overflow-hidden bg-white pointer-events-none select-none">
+                    {HOME_CV_SLIDES.map((html, idx) => (
+                      <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${cvSlideIndex === idx ? "opacity-100" : "opacity-0"}`}>
+                        <CvPreview compact html={html} />
+                      </div>
+                    ))}
+                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gradient-to-r from-primary to-primary/90 px-1 py-1 border-t border-gold/60">
+                      <span className="whitespace-nowrap text-[9px] font-extrabold leading-tight tracking-tight text-primary-foreground">CV Folio Pro</span>
+                      <span className="grid size-5 shrink-0 -rotate-12 place-items-center rounded-full border border-dashed border-gold bg-gold/20 text-[6px] font-black uppercase tracking-tight text-gold ring-1 ring-gold/60">Pro</span>
+                    </div>
+                  </div>
+                ) : tmpl.id in PANEL_BANDS ? (
+                  <div className="relative size-full overflow-hidden bg-white pointer-events-none select-none">
+                    {(tmpl.id === "lettre" ? HOME_LETTER_SLIDES : HOME_DOC_SLIDES[tmpl.id as "business" | "juridique"]).map((html, idx, arr) => (
+                      <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${docSlide % arr.length === idx ? "opacity-100" : "opacity-0"}`}>
+                        <CvPreview compact html={html} />
+                      </div>
+                    ))}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-r from-primary to-primary/90 px-1.5 py-1 border-t border-gold/60">
+                      <span className="block text-center text-[9px] font-extrabold leading-tight tracking-tight text-primary-foreground">{PANEL_BANDS[tmpl.id]}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    
+                    <span className="absolute -right-3 -top-3 size-12 rounded-full bg-gradient-to-br from-gold/30 to-transparent pointer-events-none" />
+                    <span className="grid size-9 place-items-center rounded-xl bg-white/10 ring-1 ring-gold/40 shadow-xs">
+                      <Icon className="size-5 text-gold" />
+                    </span>
+                    <span className="w-full text-left text-[11px] font-bold leading-tight line-clamp-2 text-white">
+                      {tmpl.label}
+                    </span>
+                    <span className="text-[8px] uppercase tracking-wider font-semibold text-gold/90">
+                      {templateDomain(tmpl.label)}
+                    </span>
+                  </>
+                 )}
               </Button>
             );
           })}
         </div>
+    
         {!displayedTemplates.length && <p className="py-4 text-sm text-muted-foreground">Aucun modèle publié dans cette catégorie.</p>}
         {catalog && <Link to="/cv-studio" className="mt-4 inline-flex items-center gap-2 text-primary text-sm font-semibold"><Briefcase className="size-4" />Tous les modèles CV</Link>}
       </section>
@@ -397,10 +455,11 @@ export function Home({ catalog = false }: { catalog?: boolean }) {
                 ? "bg-[#0A84FF] text-white shadow-sm"
                 : "bg-muted text-foreground hover:bg-muted/80"
             }`}
-          >
+                     >
             <Upload className="w-3.5 h-3.5" />
             Appareil
           </Button>
+          <input
             ref={fileInputRef}
             type="file"
             accept=".docx,.pdf,.txt"

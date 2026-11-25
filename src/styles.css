@@ -145,80 +145,247 @@
   display: flex;
   justify-content: center;
 }
-/* Découpage du papier en pages A4 successives style WPS Word & Office Word */
-.home-ai-sheet {
+/* ========================================================
+   BERSA WRITER : FEUILLE A4 & ESPACE DE TRAVAIL PROFESSIONNEL
+   ======================================================== */
+
+/* Espace de travail gris clair façon bureau WPS / Word */
+.bersa-writer-workspace {
+  background-color: #f1f5f9;
+  background-image: radial-gradient(#cbd5e1 0.75px, transparent 0.75px);
+  background-size: 16px 16px;
+  min-height: calc(100vh - 110px);
+  padding: 6px 12px 50px;
+  overflow-x: clip;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Règle graduée horizontale en centimètres (A4 utile 16 cm) */
+.bersa-writer-ruler {
+  width: min(100%, 794px);
+  height: 22px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-bottom: 2px solid #94a3b8;
+  display: flex;
+  position: relative;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 9px;
+  color: #64748b;
+  user-select: none;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.bersa-writer-ruler-tick {
+  flex: 1;
+  border-left: 1px solid #cbd5e1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding-left: 2px;
+  padding-bottom: 1px;
+}
+
+/* Feuille A4 standard : 210 × 297 mm (794 × 1123 px à 96 DPI) */
+.home-ai-sheet,
+.a4-page {
   width: min(100%, 794px);
   min-height: 1123px;
   background-color: #ffffff !important;
-  background: #ffffff !important;
   color: #111827 !important;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.12) !important;
-  box-shadow: 0 4px 18px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
-  padding: 48px 48px !important;
-  margin: 0 auto 18px auto;
-  position: relative;
+    margin: 0 auto 10px auto;
+  /* Marges physiques réelles de 2,5 cm (94 px) */
+  padding: 94px 94px !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
   box-sizing: border-box;
-  font-family: "Times New Roman", Times, serif;
-  font-size: 13pt;
-  line-height: 1.6;
+  position: relative;
+
+  /* Typographie par défaut : Times New Roman 12 pt (16 px), interligne 1.5 */
+  font-family: "Times New Roman", Times, "Liberation Serif", serif !important;
+  font-size: 16px !important; /* 12 pt */
+  line-height: 1.15 !important;
+  text-align: justify !important;
+  text-justify: inter-word;
+  hyphens: none !important; word-break: normal; overflow-wrap: break-word;
   outline: none;
 }
 
-/* Coupure de feuille réelle : crée la séparation visuelle entre deux pages */
-.home-ai-sheet hr.page-break,
-.home-ai-sheet .a4-page-break {
-  display: block;
-  break-after: page;
-  height: 18px !important;
-  margin: 32px -48px !important;
-  background: #E5E7EB !important; /* Couleur du bureau qui sépare les 2 feuilles */
-  border-top: 1px solid #D1D5DB !important;
-  border-bottom: 1px solid #D1D5DB !important;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
+/* Repères de marges d'angles discrets (2,5 cm) */
+.home-ai-sheet::before {
+  content: "";
+  position: absolute;
+  top: 94px;
+  left: 94px;
+  right: 94px;
+  bottom: 94px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.35);
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.35);
+  pointer-events: none;
 }
 
-@media (max-width: 640px) {
-  html, body {
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+/* Paragraphes Word standard : alignés à gauche/justifiés, aucun alinéa forcé, espacement naturel */
+.home-ai-sheet p {
+  text-indent: 0;
+  margin-top: 0 !important;
+  margin-bottom: 0.65em;
+  text-align: justify;
+}
+.home-ai-sheet p:empty::before {
+  content: "\00a0";
+}
+
+/* Titres académiques sans retrait de paragraphe */
+.home-ai-sheet h1,
+.home-ai-sheet h2,
+.home-ai-sheet h3,
+.home-ai-sheet h4 {
+  text-indent: 0;
+  font-family: "Times New Roman", Times, serif !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.home-ai-sheet h1 { font-size: 20px !important; margin: 18px 0 10px !important; text-align: center; }
+.home-ai-sheet h2 { font-size: 18px !important; margin: 16px 0 8px !important; text-align: left; }
+.home-ai-sheet h3 { font-size: 16px !important; margin: 12px 0 6px !important; text-decoration: underline; }
+
+/* Tableaux professionnels Word */
+.home-ai-sheet table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 14px 0 !important;
+  font-size: 14px !important;
+  text-indent: 0;
+}
+
+.home-ai-sheet th,
+.home-ai-sheet td {
+  border: 1px solid #1e293b !important;
+  padding: 6px 10px !important;
+  text-align: left;
+  vertical-align: top;
+}
+
+.home-ai-sheet th {
+  background-color: #f1f5f9 !important;
+  font-weight: 700;
+}
+
+/* Séparation visuelle nette entre deux pages A4 successives sans dépassement */
+.home-ai-sheet .auto-page-gap {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 24px !important;
+  margin: 24px 0 !important;
+  margin-inline: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  background: #e2e8f0 !important;
+  border-top: 1px dashed #cbd5e1 !important;
+  border-bottom: 1px dashed #cbd5e1 !important;
+  user-select: none;
+}
+
+.home-ai-sheet .auto-page-gap .page-gap-badge {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #475569;
+  background: #ffffff;
+  padding: 2px 12px;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* Barre d'état inférieure bureautique fixe */
+.bersa-writer-statusbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: #f8fafc;
+  border-top: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 11px;
+  color: #475569;
+  z-index: 40;
+  user-select: none;
+}
+
+/* Adaptation responsive sur smartphone Android / tactile */
+@media (max-width: 768px) {
+  .bersa-writer-workspace {
+    padding: 4px 4px 36px;
+    overflow-x: clip;
   }
-  .home-paper-desk {
-    padding: 6px 6px 120px 6px;
-    height: calc(100dvh - 95px);
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: hidden !important;
+  .bersa-writer-ruler {
+    display: none;
   }
-  .home-paper-content {
+  .home-ai-sheet,
+  .a4-page {
     width: 100% !important;
-    max-width: 100% !important;
+    min-height: auto !important;
+    padding: 20px 14px !important;
+    font-size: 16px !important;
+    margin: 0 auto 8px auto !important;
+  }
+  .home-ai-sheet p {
+    text-indent: 0; /* Paragraphe aligné sans alinéa forcé */
+  }
+  .home-ai-sheet::before {
+    display: none;
+  }
+  .home-ai-sheet .auto-page-gap,
+  .home-ai-sheet hr.page-break {
+    margin: 18px 0 !important;
+    width: 100% !important;
+  }
+}
+
+/* Rendu fidèle à l'impression / Export PDF */
+@media print {
+  .no-print,
+  .bersa-writer-statusbar,
+  .bersa-writer-ruler {
+    display: none !important;
+  }
+  .bersa-writer-workspace {
+    background: transparent !important;
     padding: 0 !important;
   }
   .home-ai-sheet {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-height: 780px;
-    background-color: #ffffff !important;
-    background: #ffffff !important;
-    color: #111827 !important;
-    padding: 20px 16px !important;
-    font-size: 11.5pt;
-    line-height: 1.5;
-    box-sizing: border-box !important;
-    border-radius: 4px;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 2.5cm !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
   }
-  .home-ai-sheet hr.page-break,
-  .home-ai-sheet .a4-page-break {
-    margin: 24px -16px !important;
-    height: 14px !important;
-  }
-  .home-command-bar,
-  .home-subscribe-bar {
+  .home-ai-sheet::before {
     display: none !important;
   }
+  .home-ai-sheet .auto-page-gap,
+  .home-ai-sheet hr.page-break {
+    display: none !important;
+    break-before: page;
+  }
 }
-  
+
 /* Barre desktop standard */
 .home-command-bar {
   position: sticky;
@@ -241,7 +408,7 @@
   display: block;
   break-after: page;
   margin: 20px -44px;
-  height: 16px; /* Très petit espace vide entre deux feuilles */
+  height: 8px; /* Très petit espace vide entre deux feuilles */
   background: hsl(var(--muted) / 0.65); /* Couleur du bureau sous la feuille */
   border: none !important;
   position: relative;
@@ -360,9 +527,9 @@
 /* Notes de bas de page : appel en exposant + zone de notes en bas du papier */
 .footnote-ref { color: hsl(var(--primary)); font-size: 0.75em; vertical-align: super; cursor: pointer; padding: 0 1px; }
 .a4-footnotes { background: #fff; padding: 0 24px 24px; font-family: "Times New Roman", serif; }
-.a4-footnotes-rule { border: none; border-top: 1px solid #444; width: 40%; margin: 0 0 6px; }
+.a4-footnotes-rule { border: none; border-top: 1px solid #000; width: 150px; max-width: 30%; margin: 0 0 6px; }
 .a4-footnotes-list { list-style: none; margin: 0; padding: 0; }
-.a4-footnote-item { display: flex; align-items: baseline; gap: 6px; font-size: 10pt; line-height: 1.5; padding: 1px 0; }
+.a4-footnote-item { display: flex; align-items: baseline; gap: 6px; font-size: 10pt; line-height: 1.15; padding: 1px 0; }
 .a4-footnote-number { color: hsl(var(--primary)); font-size: 0.75em; min-width: 14px; }
 .a4-footnote-text { flex: 1; }
 .a4-footnote-action { font-size: 10px; color: hsl(var(--muted-foreground)); text-decoration: underline; margin-left: 6px; }
@@ -471,10 +638,479 @@ img, video, canvas, iframe, table { max-width: 100%; }
 .home-writing-layout { padding-bottom: env(safe-area-inset-bottom, 0px); }
 @media (max-width: 640px) {
   .home-editor .home-ai-sheet { min-height: calc((100vw - 16px) * 297 / 210); font-size: 13pt; line-height: 1.6; }
-  .home-ai-sheet .auto-page-gap, .home-ai-sheet .page-break { margin-inline: -16px; }
+  .home-ai-sheet .auto-page-gap, .home-ai-sheet .page-break { margin-inline: 0 !important; }
   .home-editor-commands { max-height: calc(100dvh - 108px); overflow-y: auto; }
 }
 @media print {
   .home-ai-sheet .auto-page-gap { height: 0 !important; margin: 0 !important; break-before: page; }
   .home-ai-sheet .auto-page-gap::after { display: none; }
 }
+
+/* Modèle de papier Word/WPS : mise en page proportionnelle à une vraie feuille A4.
+   Aucun texte n'est imposé ; seules les règles de présentation s'appliquent. */
+.home-paper-content { container-type: inline-size; }
+.home-editor .home-paper-content .home-ai-sheet {
+  --sheet-w: min(100cqw, 794px);
+  --pad-x: calc(var(--sheet-w) * 0.119);
+  --pad-y: calc(var(--sheet-w) * 0.1);
+  --mark: calc(var(--sheet-w) * 0.03);
+  --mark-color: color-mix(in oklab, var(--paper-ink) 28%, transparent);
+  width: var(--sheet-w) !important;
+  max-width: 100% !important;
+  min-height: calc(var(--sheet-w) * 297 / 210) !important;
+  padding: var(--pad-y) var(--pad-x) !important;
+  font-family: "Times New Roman", Times, serif;
+  font-size: max(7px, calc(var(--sheet-w) * 0.02183)) !important; /* 13 pt réels sur une feuille A4 de 794 px */
+  line-height: 1.5 !important;
+  text-align: justify;
+  hyphens: none !important; word-break: normal; overflow-wrap: break-word;
+  overflow-wrap: break-word;
+  border-radius: 0;
+  background-image:
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)) !important;
+  background-repeat: no-repeat !important;
+  background-size:
+    var(--mark) 1px, 1px var(--mark), var(--mark) 1px, 1px var(--mark),
+    var(--mark) 1px, 1px var(--mark), var(--mark) 1px, 1px var(--mark) !important;
+    background-position:
+    /* Haut Gauche : trait horizontal puis vertical */
+    calc(var(--pad-x) - var(--mark)) var(--pad-y), var(--pad-x) calc(var(--pad-y) - var(--mark)),
+    /* Haut Droit : trait horizontal puis vertical */
+    calc(100% - var(--pad-x)) var(--pad-y), calc(100% - var(--pad-x)) calc(var(--pad-y) - var(--mark)),
+    /* Bas Gauche : trait horizontal puis vertical */
+    calc(var(--pad-x) - var(--mark)) calc(100% - var(--pad-y)), var(--pad-x) calc(100% - var(--pad-y)),
+    /* Bas Droit : trait horizontal puis vertical */
+    calc(100% - var(--pad-x)) calc(100% - var(--pad-y)), calc(100% - var(--pad-x)) calc(100% - var(--pad-y)) !important;
+}
+.home-editor .home-ai-sheet p { margin: 0 0 0.65em; text-indent: 0; }
+.home-editor .home-ai-sheet p[style*="text-align: center"],
+.home-editor .home-ai-sheet p[style*="text-align: right"],
+.home-editor .home-ai-sheet li p, .home-editor .home-ai-sheet td p, .home-editor .home-ai-sheet th p,
+.home-editor .home-ai-sheet blockquote p { text-indent: 0; }
+.home-editor .home-ai-sheet li p, .home-editor .home-ai-sheet td p, .home-editor .home-ai-sheet th p { margin-bottom: 0.2em; }
+.home-editor .home-ai-sheet h1, .home-editor .home-ai-sheet h2, .home-editor .home-ai-sheet h3 {
+  text-align: left; text-indent: 0; line-height: 1.3; margin: 1.2em 0 0.8em; hyphens: manual;
+}
+.home-editor .home-ai-sheet h1 { font-size: 1.25em; } .home-editor .home-ai-sheet h2 { font-size: 1.1em; } .home-editor .home-ai-sheet h3 { font-size: 1em; }
+.home-editor .home-ai-sheet > :first-child { margin-top: 0; }
+.home-editor .home-ai-sheet .auto-page-gap,
+.home-editor .home-ai-sheet .page-break { margin-inline: 0 !important; width: 100% !important; box-sizing: border-box !important; }
+.home-editor .home-ai-sheet .auto-page-gap { --rest: 0px; background: transparent; }
+.home-editor .home-ai-sheet .auto-page-gap::after {
+  top: 0; bottom: 0; height: auto; border: none; background-color: var(--paper) !important;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--editor-desk), var(--editor-desk)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color));
+  background-size: 100% 18px,
+    var(--mark) 1px, 1px var(--mark), var(--mark) 1px, 1px var(--mark),
+    var(--mark) 1px, 1px var(--mark), var(--mark) 1px, 1px var(--mark);
+  background-position: 0 calc(var(--rest) + var(--pad-y)),
+    calc(var(--pad-x) - var(--mark)) var(--rest), var(--pad-x) var(--rest),
+    calc(100% - var(--pad-x) + var(--mark)) var(--rest), calc(100% - var(--pad-x)) var(--rest),
+    calc(var(--pad-x) - var(--mark)) 100%, var(--pad-x) 100%,
+    calc(100% - var(--pad-x) + var(--mark)) 100%, calc(100% - var(--pad-x)) 100%;
+}
+@media (max-width: 640px) {
+  .home-editor .home-paper-desk { padding-inline: 0 !important; }
+}
+@media print {
+  .home-editor .home-paper-content .home-ai-sheet { background-image: none !important; width: 100% !important; font-size: 12pt !important; padding: 0 !important; }
+  .home-editor .home-ai-sheet .auto-page-gap::after { display: none !important; }
+}
+
+/* Coupure nette entre pages A4 : la page précédente se referme, la suivante s'ouvre avec ses coins */
+.home-editor .home-paper-content .home-ai-sheet .auto-page-gap {
+  display: block !important;
+  position: relative !important;
+  height: calc(var(--pad-y) * 2 + 16px) !important;
+  margin: 0 calc(var(--pad-x) * -1) !important;
+  width: calc(100% + var(--pad-x) * 2) !important;
+  max-width: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  pointer-events: none;
+}
+.home-editor .home-paper-content .home-ai-sheet .auto-page-gap::after {
+  content: "" !important; display: block !important;
+  position: absolute !important; left: -1px !important; right: -1px !important;
+  top: var(--pad-y) !important; height: 16px !important; bottom: auto !important;
+  background: var(--editor-desk, #e2e8f0) !important; background-image: none !important;
+  box-shadow: inset 0 3px 4px -3px rgba(15,23,42,.25), inset 0 -3px 4px -3px rgba(15,23,42,.25);
+}
+.home-editor .home-paper-content .home-ai-sheet .auto-page-gap::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color)),
+    linear-gradient(var(--mark-color), var(--mark-color)), linear-gradient(var(--mark-color), var(--mark-color));
+  background-size: var(--mark) 1px, 1px var(--mark), var(--mark) 1px, 1px var(--mark),
+    var(--mark) 1px, 1px var(--mark), var(--mark) 1px, 1px var(--mark);
+  background-position:
+    calc(var(--pad-x) - var(--mark)) 0, var(--pad-x) 0,
+    calc(50% - var(--pad-x)) 0, calc(100% - var(--pad-x)) 0,
+    calc(var(--pad-x) - var(--mark)) 100%, var(--pad-x) 100%,
+    calc(50% - var(--pad-x)) 100%, calc(100% - var(--pad-x)) 100%;
+}
+.home-editor .home-ai-sheet .auto-page-gap .page-gap-badge {
+  position: absolute; left: 50%; top: var(--pad-y); transform: translate(-50%, -2px); z-index: 1;
+  font-size: 9px; padding: 1px 8px; line-height: 16px;
+}
+@media print {
+  .home-editor .home-paper-content .home-ai-sheet .auto-page-gap { height: 0 !important; margin: 0 !important; break-before: page; }
+  .home-editor .home-paper-content .home-ai-sheet .auto-page-gap::before,
+  .home-editor .home-paper-content .home-ai-sheet .auto-page-gap::after,
+  .home-editor .home-ai-sheet .auto-page-gap .page-gap-badge { display: none !important; }
+}
+
+/* Page allongée sur téléphone, comme une page Word/WPS mobile */
+@container (max-width: 599px) {
+  .home-editor .home-paper-content .home-ai-sheet { min-height: calc(var(--sheet-w) * 2.1) !important; }
+}
+
+/* Réglages réels de l'atelier : interligne, marges, curseur visible au-dessus du clavier */
+.home-editor .bersa-writer-workspace .home-ai-sheet { line-height: var(--writer-line, 1.6) !important; scroll-padding-bottom: 40vh; }
+.home-editor :is(.margin-Étroites, .margin-Larges) .home-paper-content .home-ai-sheet { --pad-x: calc(min(100cqw, 794px) * 0.119 * var(--writer-margin-scale, 1)); padding-left: var(--pad-x) !important; padding-right: var(--pad-x) !important; }
+.home-editor .home-ai-sheet .page-break { display: block; height: 16px; break-after: page; }
+.home-editor .home-paper-desk { scroll-padding-bottom: 45vh; overflow-anchor: auto; }
+
+/* Colonnes, bordure, en-tête/pied, commentaires et suivi des modifications */
+.bersa-writer-workspace.cols-2 .home-ai-sheet { column-count: 2; column-gap: 24px; }
+.bersa-writer-workspace.cols-3 .home-ai-sheet { column-count: 3; column-gap: 20px; }
+.bersa-writer-workspace.page-border .home-ai-sheet { outline: 2px solid var(--primary); outline-offset: -28px; }
+.bersa-writer-workspace.format-A5 .home-ai-sheet { max-width: 559px; margin-inline: auto; }
+.bersa-writer-workspace.format-Letter .home-ai-sheet { max-width: 816px; margin-inline: auto; }
+.bersa-page-header { font-family: Arial, sans-serif; font-size: 9pt; letter-spacing: .02em; text-transform: uppercase; color: #8aa58a; padding: 6px 76px 4px; gap: 6px; }
+.bersa-page-num { color: #555; padding-right: 6px; border-right: 1px solid #999; }
+@media (max-width: 640px) { .bersa-page-header { padding: 4px 20px; } }
+.bersa-page-footer { font-family: 'Times New Roman', serif; font-size: 10pt; text-align: center; color: var(--muted-foreground); padding: 4px 8px; }
+.bersa-comment { background: color-mix(in oklab, var(--gold, #d4af37) 35%, transparent); border-bottom: 2px dotted var(--gold, #d4af37); cursor: help; }
+.bersa-track-ins { text-decoration: underline; text-decoration-color: #059669; color: #047857; }
+
+.bersa-writer-workspace.format-A3 .home-ai-sheet { max-width: 1123px; margin-inline: auto; }
+.bersa-writer-workspace.format-Legal .home-ai-sheet { max-width: 816px; margin-inline: auto; }
+.bersa-writer-workspace .home-ai-sheet { background-color: var(--writer-page-color, #ffffff); }
+
+/* Touch ribbon: one copy of each command, ordered like the supplied references. */
+.writer-tool-panel { padding: 4px; display: flex; gap: 3px; overflow-x: auto; overflow-y: hidden; height: 48px; background: var(--editor-desk); overscroll-behavior-x: contain; }
+.writer-tool-panel > div { flex-shrink: 0; }
+.writer-home-tools, .writer-insert-tools { display: flex; align-items: center; flex-wrap: nowrap; gap: 3px; width: max-content; }
+.writer-tool-group { display: flex; align-items: center; flex-shrink: 0; border-right: 1px solid var(--border); padding-right: 4px; }
+.writer-tool-group h4 { display: none; }
+.writer-tool-surface { display: flex; align-items: center; gap: 3px; }
+.writer-tool-line { display: flex; align-items: center; gap: 2px; flex-shrink: 0; height: 38px; }
+.writer-tool-row { display: flex; justify-content: flex-start; width: auto; height: 36px; padding: 4px 7px; border-radius: 4px; font-size: 12px; text-align: left; white-space: nowrap; flex-shrink: 0; }
+.writer-tool-row > span { min-width: 0; }
+.writer-tool-row > span:last-child:nth-child(3) { display: none; }
+.writer-select-row { display: flex; align-items: center; gap: 4px; padding: 2px 4px; height: 36px; flex-shrink: 0; font-size: 12px; }
+.writer-select-row > svg { width: 18px; height: 18px; flex-shrink: 0; }
+.writer-select-row > span { display: none; }
+.writer-select-row select { min-width: 55px; max-width: 135px; padding: 4px; background: var(--card); color: var(--foreground); }
+.writer-select-row input[type=number] { width: 42px; text-align: center; background: var(--muted); border-radius: 6px; padding: 5px 0; }
+.writer-color-control { display: flex; gap: 6px; align-items: center; }
+.writer-color-control input { width: 25px; height: 25px; border: none; background: transparent; }
+.writer-insert-shortcuts { display: flex; align-items: center; gap: 3px; }
+.writer-insert-shortcuts .writer-tool-row { gap: 3px; height: 36px; padding: 4px 7px; font-size: 12px; }
+.writer-insert-shortcuts .writer-tool-row > span:last-child:nth-child(3) { display: none; }
+.writer-home-tools > .writer-tool-group:nth-child(3) { order: 1; }
+.writer-home-tools > .writer-tool-group:nth-child(2) { order: 5; }
+.writer-home-tools > .writer-tool-group:nth-child(4) { order: 2; }
+.writer-home-tools > .writer-tool-group:nth-child(5) { order: 3; }
+.writer-home-tools > .writer-tool-group:nth-child(6) { order: 4; }
+.writer-home-tools > .writer-tool-group:first-child .writer-tool-line:nth-child(2) { order: 3; }
+.writer-home-tools > .writer-tool-group:first-child .writer-tool-line:last-child { order: 2; }
+
+/* Margin layer is measured against the actual white paper, never the desk. */
+.writer-paper-host { position: relative; width: 100%; max-width: 794px; flex-shrink: 0; }
+.writer-margin-layer { position: absolute; pointer-events: none; }
+.writer-page-margins { position: absolute; width: 100%; pointer-events: none; }
+.writer-internal-header { position: absolute; top: 2.5%; left: 12%; width: 76%; height: 5%; pointer-events: auto; background: transparent; border: 0; color: var(--paper-ink); font: 11px Arial, sans-serif; outline: none; }
+.writer-internal-header:focus, .writer-footer-row input:focus { border-bottom: 1px dashed var(--border); }
+.writer-internal-bottom { position: absolute; bottom: 2.5%; left: 12%; right: 12%; color: var(--paper-ink); font-family: 'Times New Roman', serif; }
+.writer-footer-row { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 11px; }
+.writer-footer-row input { min-width: 0; width: 100%; background: transparent; border: 0; text-align: center; outline: none; pointer-events: auto; }
+.writer-internal-notes { background: var(--paper); pointer-events: auto; padding-bottom: 5px; }
+.writer-internal-notes hr { width: 30%; margin: 0 0 5px; border-top: 1px solid var(--paper-ink); }
+.writer-note-row { display: flex; gap: 5px; align-items: baseline; font-size: 11px; }
+.writer-note-row input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; }
+.writer-note-row a { color: var(--paper-ink); }
+.writer-note-row button { width: 22px; height: 22px; }
+.home-editor .home-paper-content .home-ai-sheet .auto-page-gap::after { top: calc(var(--gap-rest, 0px) + var(--pad-y)) !important; }
+.home-editor .home-paper-content .home-ai-sheet .auto-page-gap::before { top: var(--gap-rest, 0px); }
+.home-editor .home-ai-sheet p[data-drop-cap=true]::first-letter { float: left; font-size: 3em; line-height: 1; margin-right: 0.12em; }
+.home-editor .home-ai-sheet p[data-text-box=true] { border: 1px solid var(--paper-ink); padding: 8px; min-height: 45px; }
+.home-editor .home-ai-sheet p[data-border=true] { border: 1px solid var(--paper-ink); padding: 6px; }
+@media print { .writer-note-row button { display: none; } }
+
+.home-editor .home-paper-content .home-ai-sheet .writer-explicit-gap { position: relative; margin: 0 calc(var(--pad-x) * -1) !important; width: calc(100% + var(--pad-x) * 2) !important; border: 0; background: transparent; }
+.home-editor .home-paper-content .home-ai-sheet .writer-explicit-gap::after { content: ""; position: absolute; left: 0; right: 0; top: calc(var(--gap-rest, 0px) + var(--pad-y)); height: 16px; background: var(--editor-desk); }
+@media print { .home-editor .home-paper-content .home-ai-sheet .writer-explicit-gap { height: 0 !important; break-before: page; } .writer-explicit-gap::after { display: none; } }
+
+/* Atelier : notes de bas de page façon Word, outils compacts, lecture confortable */
+.writer-internal-notes { padding-bottom: 2px; }
+.writer-internal-notes hr { width: 33%; margin: 0 0 3px; border: 0; border-top: 0.75px solid var(--paper-ink); }
+.writer-note-row { gap: 2px; align-items: flex-start; font-size: 10px; line-height: 1.2; margin: 0; }
+.writer-note-row a { text-decoration: none; line-height: 1; }
+.writer-note-row a sup { font-size: 0.75em; vertical-align: super; position: relative; top: -0.1em; }
+.writer-note-row input { font: inherit; padding: 0; height: auto; line-height: 1.2; }
+.writer-note-row input::placeholder { color: var(--muted-foreground); font-style: italic; }
+.writer-home-tools, .writer-insert-tools { gap: 2px !important; font-size: 11px; }
+.writer-home-tools button, .writer-home-tools label, .writer-home-tools span { font-size: 11px; }
+.writer-tool-line { gap: 1px !important; }
+.home-ai-sheet { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+.home-ai-sheet p { hyphens: none !important; word-break: normal; overflow-wrap: break-word; }
+
+/* Papier réel A4 rigide WPS : feuille blanche pure, sans traits d'angle parasites */
+.home-editor .home-paper-desk { 
+  overflow-x: auto; 
+  touch-action: pan-x pan-y !important; 
+  padding-inline: 8px !important;
+  align-items: flex-start;
+}
+.writer-paper-host { 
+  width: calc(100% * var(--writer-zoom, 1)) !important; 
+  max-width: calc(794px * var(--writer-zoom, 1)) !important; 
+  margin-inline: auto; 
+  align-self: flex-start; 
+}
+.home-editor .bersa-writer-workspace .writer-paper-host,
+.home-editor .bersa-writer-workspace .home-paper-content {
+  width: calc(794px * var(--writer-zoom, 1)) !important;
+  max-width: none !important;
+  min-width: calc(794px * var(--writer-zoom, 1)) !important;
+  margin-inline: 0 !important;
+}
+.home-editor .bersa-writer-workspace .home-paper-content .home-ai-sheet {
+  --sheet-w: calc(794px * var(--writer-zoom, 1));
+  width: var(--sheet-w) !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  min-height: calc(var(--sheet-w) * 297 / 210) !important;
+  --pad-x: calc(var(--sheet-w) * 0.1189);
+  --pad-y: calc(var(--sheet-w) * 0.1189);
+  padding: var(--pad-y) var(--pad-x) !important;
+  /* Suppression complète des traits dans les coins : fond uni blanc */
+  background-image: none !important;
+  border-radius: 0 !important;
+  letter-spacing: 0.012em;
+  word-spacing: 0.04em;
+  overflow-wrap: break-word !important;
+  overflow-x: hidden;
+  font-size: calc(var(--sheet-w, 794px) * 0.02015) !important;
+  line-height: var(--writer-line, 1.15) !important;
+}
+.home-editor .home-paper-content .home-ai-sheet .auto-page-gap::before,
+.home-editor .home-paper-content .home-ai-sheet .auto-page-gap::after {
+  background-image: none !important;
+}
+.home-editor .bersa-writer-workspace:is(.margin-Étroites, .margin-Larges) .home-paper-content .home-ai-sheet {
+  --pad-x: calc(var(--sheet-w) * 0.119 * var(--writer-margin-scale, 1));
+}
+.home-editor .bersa-writer-workspace.orientation-Paysage .home-paper-content .home-ai-sheet { 
+  min-height: calc(var(--sheet-w) * 210 / 297) !important; 
+  --sheet-w: calc(1123px * var(--writer-zoom, 1));
+  --pad-x: calc(794px * var(--writer-zoom, 1) * 0.119);
+  --pad-y: calc(794px * var(--writer-zoom, 1) * 0.1);
+}
+
+.writer-margin-layer, .writer-page-margins { max-width: 100% !important; }
+
+/* Champs d'en-tête, pied et notes transparents */
+.writer-internal-header, 
+.writer-footer-row textarea, 
+.writer-note-row textarea { 
+  display: block; 
+  resize: none; 
+  overflow: hidden; 
+  background: transparent !important; 
+  border: 0 !important; 
+  outline: none !important; 
+  box-shadow: none !important;
+  padding: 0; 
+  margin: 0; 
+  color: var(--paper-ink); 
+  font-family: 'Times New Roman', Times, serif; 
+  white-space: pre-wrap; 
+  overflow-wrap: anywhere; 
+  pointer-events: auto; 
+  field-sizing: content; 
+}
+
+/* En-tête dynamique : AUCUNE ligne hors focus, apparaît uniquement au clic */
+.writer-internal-header { 
+  top: 3.6%; 
+  left: 11.9%; 
+  width: 76.2%; 
+  height: auto; 
+  min-height: 1.4em; 
+  font-size: var(--margin-font, 11px); 
+  line-height: 1.3; 
+  text-align: center;
+  border-bottom: 0.75px solid transparent !important;
+  transition: border-color .15s ease, opacity .2s ease;
+}
+.writer-internal-header:focus { 
+  border-bottom-color: color-mix(in oklab, var(--paper-ink) 30%, transparent) !important;
+  opacity: 1 !important;
+}
+
+.writer-internal-bottom { 
+  bottom: 3%; 
+  left: 11.9%; 
+  right: 11.9%; 
+}
+.writer-footer-row { 
+  position: relative;
+  font-size: var(--margin-font, 11px); 
+  min-height: 1.4em; 
+  margin-top: 0.3em;
+  border-top: 0.5px solid transparent !important;
+}
+.writer-footer-row:focus-within {
+  border-top-color: color-mix(in oklab, var(--paper-ink) 25%, transparent) !important;
+}
+.writer-footer-row textarea { 
+  flex: 1; 
+  min-width: 0; 
+  width: 100%; 
+  text-align: center; 
+  font-size: inherit; 
+  line-height: 1.3; 
+}
+.writer-page-number { flex-shrink: 0; font-family: 'Times New Roman', Times, serif; }
+.writer-page-number.align-center { position: absolute; left: 50%; transform: translateX(-50%); bottom: 0; }
+
+/* Notes de bas de page longues WPS : ligne complète sans dépasser la marge */
+.writer-internal-notes { 
+  padding-bottom: 0.3em; 
+  background: transparent; 
+  margin-inline: 0 !important;
+  width: 100% !important;
+}
+.writer-internal-notes hr { 
+  width: 42% !important; 
+  margin-left: 0 !important;
+  margin-bottom: 0.4em !important; 
+  border: 0 !important; 
+  border-top: 0.75px solid var(--paper-ink) !important; 
+}
+.writer-note-row { 
+  display: flex; 
+  gap: 0.3em; 
+  align-items: baseline !important; 
+  font-size: var(--note-font, 10pt) !important; 
+  line-height: 1.0 !important; 
+  margin: 0 0 0.15em; 
+  width: 100% !important;
+}
+.writer-note-row a sup { 
+  font-size: 0.75em !important; 
+  line-height: 1 !important; 
+  vertical-align: baseline !important; 
+  font-weight: normal !important;
+}
+.writer-note-row textarea { 
+  flex: 1; 
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  font-size: inherit !important; 
+  line-height: 1.0 !important; 
+  text-align: justify !important; 
+  overflow-wrap: break-word !important;
+}
+
+/* Appel de note collé au mot (ex: Dieudonné¹) sans toucher la ligne du dessus */
+.footnote-ref, 
+.footnote-ref a, 
+.footnote-ref sup { 
+  display: inline !important;
+  font-size: 0.72em !important; 
+  line-height: 0 !important; 
+  vertical-align: baseline !important; 
+  position: relative !important; 
+  top: -0.32em !important; 
+  padding: 0 !important; 
+  margin: 0 !important; 
+  margin-left: 0.5px !important; 
+  text-decoration: none !important; 
+  font-weight: normal !important;
+  color: inherit !important; 
+}
+
+/* En-tête et pied discrets hors focus, mais notes de bas de page 100 % claires et lisibles */
+.writer-internal-header, .writer-footer-row { 
+  opacity: 0.5; 
+  transition: opacity .2s ease; 
+}
+.writer-internal-header:focus, .writer-footer-row:focus-within { 
+  opacity: 1; 
+}
+.writer-internal-notes { 
+  opacity: 1 !important; 
+  color: var(--paper-ink) !important; 
+}
+
+@media print { 
+  .writer-internal-header, .writer-footer-row, .writer-internal-notes { opacity: 1; } 
+  }
+                 
+
+/* Notes de bas de page rigides : même largeur et mêmes retours à la ligne à tous les zooms */
+.writer-internal-notes, .writer-note-row { min-width: 0; }
+.writer-note-row textarea {
+  white-space: pre-wrap !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  hyphens: none !important;
+  letter-spacing: 0.012em;
+  word-spacing: 0.04em;
+}
+
+/* Rigid reference paper: zoom scales text, decoration gaps and margin overlays together. */
+.home-editor .bersa-writer-workspace .home-paper-content {
+  zoom: var(--writer-zoom, 1);
+  width: 794px !important;
+  min-width: 794px !important;
+}
+.home-editor .bersa-writer-workspace.orientation-Paysage .writer-paper-host {
+  width: calc(1123px * var(--writer-zoom, 1)) !important;
+  min-width: calc(1123px * var(--writer-zoom, 1)) !important;
+}
+.home-editor .bersa-writer-workspace.orientation-Paysage .home-paper-content {
+  width: 1123px !important;
+  min-width: 1123px !important;
+}
+.home-editor .bersa-writer-workspace .home-paper-content .home-ai-sheet {
+  --sheet-w: 794px;
+  font-size: 13pt !important;
+  letter-spacing: 0;
+  word-spacing: normal;
+}
+.home-editor .bersa-writer-workspace.orientation-Paysage .home-paper-content .home-ai-sheet {
+  --sheet-w: 1123px;
+  --pad-x: calc(794px * 0.119 * var(--writer-margin-scale, 1));
+  --pad-y: calc(794px * 0.1);
+}
+.home-editor .bersa-writer-workspace .writer-margin-layer {
+  zoom: var(--writer-zoom, 1);
+  max-width: none !important;
+}
+.home-editor .home-ai-sheet p { line-height: inherit; }
+.home-editor .home-ai-sheet p[style*="line-height"] { line-height: revert-layer; }
+.writer-note-row { font-weight: normal; }
+.writer-internal-bottom { transition: none; }
+.cv-color-input { padding: 0; overflow: hidden; }
+.cv-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+.cv-color-input::-webkit-color-swatch { border: 0; border-radius: 50%; }
+:root { --google-button-bg: #FFFFFF; --google-button-border: #747775; --google-button-text: #1F1F1F; }
+.dark { --google-button-bg: #131314; --google-button-border: #8E918F; --google-button-text: #E3E3E3; }
+.google-sign-in { background: var(--google-button-bg); color: var(--google-button-text); border: 1px solid var(--google-button-border); }

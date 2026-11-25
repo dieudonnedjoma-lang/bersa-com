@@ -1,5 +1,8 @@
+import { KeepBlockStyle } from "@/lib/keep-block-style";
+import { CommentMark, InsertionMark, TrackChanges } from "@/lib/review-marks";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import type { DocumentMenuActions } from "@/components/AppShell";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Node } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -8,9 +11,40 @@ import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
 import { Table, TableRow, TableCell, TableHeader } from "@tiptap/extension-table";
 import Highlight from "@tiptap/extension-highlight";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import { ParagraphIndent } from "@/lib/writer-commands";
+import { WriterLayout, Bookmark, attachLayout, extractLayout } from "@/lib/writer-layout";
+import { WriterPaper } from "@/components/WriterPaper";
+import { writerTextFit, scaleToDisplayZoom, displayZoomToScale } from "@/lib/writer-viewport";
 import { toast } from "sonner";
-import { PenTool, Sparkles, Save, ChevronUp, ChevronDown, Paperclip, History, Mic, Square, Loader2, RotateCcw, FileDown, Copy, Check, X,FileText, Undo2, Redo2,} from "lucide-react";
-import { Send, Loader2, Mic, Square, Trash2, X, FileAudio, Paperclip, RotateCcw, Sparkles, ChevronDown, ChevronUp, History, PenTool, Copy, Check, FileDown, Plus, Save, Download, Folder } from "lucide-react";
+import outilsIcon from "@/assets/outils-icon.png.asset.json";
+import { ArrowUp, Share2,
+  Send,
+  Loader2,
+  Mic,
+  Square,
+  Trash2,
+  X,
+  FileAudio,
+  Paperclip,
+  RotateCcw,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  History,
+  PenTool,
+  Copy,
+  Check,
+  FileDown,
+  Plus,
+  Save,
+  Download,
+  Folder,
+  FileText,
+  Undo2,
+  Redo2,
+} from "lucide-react";
 import { importDocumentFile, takeDocumentFile, sanitizeDocumentHtml } from "@/lib/document-import";
 import { AutoPages } from "@/lib/editor-pagination";
 import { AppShell } from "@/components/AppShell";
@@ -37,7 +71,19 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
   const [error, setError] = useState("");
   const [files, setFiles] = useState<Attachment[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [settings, setSettings] = useState<PageSettings>({ margin: "Normales", orientation: "Portrait", format: "A4", zoom: "100%", ruler: false, watermark: "", lineNumbers: false, viewMode: "page", headerText: "", footerText: "" });
+  const openFileInput = useRef<HTMLInputElement>(null);
+  const [settings, setSettings] = useState<PageSettings>({ margin: "Normales", orientation: "Portrait", format: "A4", zoom: "100%", ruler: false, watermark: "", lineNumbers: false, viewMode: "page", headerText: "", footerText: "", lineSpacing: "1.2" });
+  const deskRef = useRef<HTMLDivElement | null>(null);
+  const [deskEl, setDeskEl] = useState<HTMLDivElement | null>(null);
+  const [fitText, setFitText] = useState(true);
+  const fitPaper = () => {
+    const desk = deskRef.current;
+    if (!desk) return;
+    const fit = writerTextFit(desk.clientWidth, settings.orientation, settings.margin);
+    setFitText(true);
+    setSettings(s => ({ ...s, zoom: "100%" }));
+    requestAnimationFrame(() => { desk.scrollLeft = fit.scrollLeft; });
+  };
   const [recording, setRecording] = useState(false);
   const [audio, setAudio] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
@@ -50,8 +96,10 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
   const [history, setHistory] = useState<Array<{ id: string; prompt: string; action: string; time: string }>>([]);
   // Décalage pour remonter la capsule au-dessus du clavier virtuel mobile
   const [keyboardOffset, setKeyboardOffset] = useState(0);
-    // Affichage aéré et épuré (sans encombrement)
-    const [ribbonOpen, setRibbonOpen] = useState(false);
+  // Affichage aéré et épuré (sans encombrement)
+  const [ribbonOpen, setRibbonOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(true);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
     const [showAssistantBar, setShowAssistantBar] = useState(false);
@@ -63,7 +111,16 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
   const [docFileName, setDocFileName] = useState("Mon_Document_BERSA");
   const [exportFormat, setExportFormat] = useState<"docx" | "pdf" | "txt">("docx");
   const [targetFolder, setTargetFolder] = useState("downloads");
-  const Frame = embedded ? Fragment : AppShell;
+  const [cloudId, setCloudId] = useState<string | null>(null);
+  const [cloudState, setCloudState] = useState("");
+  const [versions, setVersions] = useState<Array<{ id: string; title: string; created_at: string }> | null>(null);
+    const Frame = (embedded ? (({ children }: any) => <>{children}</>) : AppShell) as React.ComponentType<{
+    children: ReactNode;
+    minimal?: boolean;
+    title?: string;
+    onTitleChange?: (val: string) => void;
+    documentActions?: DocumentMenuActions;
+  }>;
   useEffect(() => {
     const updateOffset = () => {
       const vv = window.visualViewport;
@@ -89,23 +146,25 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     }
     window.addEventListener("scroll", updateOffset);
 
-    // Suivi dynamique pendant l'animation d'ouverture du clavier lors du toucher dans le texte
+   // Approche WPS Word : accompagnement doux du focus centré sur le curseur
     const onFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest(".home-ai-sheet, input, textarea, [contenteditable]")) {
-        let attempts = 0;
-        const interval = setInterval(() => {
-          updateOffset();
-          attempts++;
-          if (attempts > 10) clearInterval(interval);
-        }, 40);
+      if (target?.closest(".home-ai-sheet")) {
+        setTimeout(() => {
+          const selection = window.getSelection();
+          const node = selection?.anchorNode;
+          const element = (node?.nodeType === 1 ? node : node?.parentElement) as HTMLElement | null;
+          if (element && deskRef.current?.contains(element)) {
+            element.scrollIntoView({ block: "nearest", behavior: "smooth" }); 
+          }
+        }, 100);
       }
-    };
+    };    
 
     const onFocusOut = () => {
       setTimeout(updateOffset, 150);
     };
-
+    
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
 
@@ -121,7 +180,7 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
   }, []);
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit, TextStyleKit, TextAlign.configure({ types: ["heading", "paragraph"] }), Image.configure({ allowBase64: true }), Table.configure({ resizable: true }), TableRow, TableCell, TableHeader, Highlight.configure({ multicolor: true }), PageBreak, Footnote, AutoPages],
+    extensions: [StarterKit, TextStyleKit, TextAlign.configure({ types: ["heading", "paragraph"] }), Image.configure({ allowBase64: true }), Table.configure({ resizable: true }), TableRow, TableCell, TableHeader, Highlight.configure({ multicolor: true }), PageBreak, Footnote, AutoPages, KeepBlockStyle, Subscript, Superscript, ParagraphIndent, WriterLayout, Bookmark, CommentMark, InsertionMark, TrackChanges],
     content: "<p></p>",
     onUpdate: ({ editor: e }) => {
       renumberFootnotes(e);
@@ -136,6 +195,29 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
       },
     },
   });
+
+  useEffect(() => {
+    const desk = deskRef.current;
+    if (!desk || !editor || !fitText) return;
+      const applyFit = () => {
+      const fit = writerTextFit(desk.clientWidth, settings.orientation, settings.margin);
+      const nextZoom = `${scaleToDisplayZoom(fit.scale)}%`;
+      setSettings(s => s.zoom === nextZoom ? s : { ...s, zoom: nextZoom });
+      requestAnimationFrame(() => { desk.scrollLeft = fit.scrollLeft; });
+    };
+    applyFit();
+    const late = window.setTimeout(applyFit, 400);
+    const resize = new ResizeObserver(applyFit);
+    resize.observe(desk);
+    return () => { resize.disconnect(); window.clearTimeout(late); };
+  }, [editor, deskEl, fitText, settings.orientation, settings.margin]);
+
+  useEffect(() => {
+    const sheet = editor?.view.dom;
+    if (!sheet) return;
+    sheet.dispatchEvent(new CustomEvent("writer-layout-change"));
+    if (fitText && deskRef.current) deskRef.current.scrollLeft = writerTextFit(deskRef.current.clientWidth, settings.orientation, settings.margin).scrollLeft;
+  }, [editor, settings.zoom, settings.orientation, settings.margin, fitText]);
 
   useEffect(() => {
     if (!editor) return;
@@ -161,8 +243,8 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
         } else if (id) {
           const { data, error } = await supabase.from("user_docs").select("content,title").eq("id", id).single();
           if (error || !data) throw new Error("Document indisponible.");
-          if (!cancelled) { editor.commands.setContent(sanitizeDocumentHtml(data.content)); setDocFileName(data.title); }
-        } else if (html) editor.commands.setContent(sanitizeDocumentHtml(html));
+          if (!cancelled) { loadWithLayout(data.content); setDocFileName(data.title); setCloudId(id); }
+        } else if (html) loadWithLayout(html);
       } catch (error) { toast.error(error instanceof Error ? error.message : "Ouverture impossible."); }
     };
     void open();
@@ -203,11 +285,145 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     if (!editor) return;
     const saveTimer = setInterval(() => {
       if (editor.getText().trim()) {
-        localStorage.setItem("bersa_current_draft", JSON.stringify(editor.getJSON()));
+        const json = JSON.stringify(editor.getJSON());
+        if (json !== localStorage.getItem("bersa_current_draft")) {
+          setSaveState("saving");
+          localStorage.setItem("bersa_current_draft", json);
+          setSaveState("saved");
+        }
       }
     }, 2000);
-    return () => clearInterval(saveTimer);
+    const onUpdate = () => setSaveState("idle");
+    editor.on("update", onUpdate);
+    return () => { clearInterval(saveTimer); editor.off("update", onUpdate); };
   }, [editor]);
+  // Zoom à deux doigts (et Ctrl + molette) sur le papier : le texte se ré-agence proportionnellement, sans flou.
+  useEffect(() => {
+    const desk = deskRef.current;
+    if (!desk) return;
+    let start = 0, base = 1;
+    const read = () => Number(desk.style.getPropertyValue("--writer-zoom")) || 1;
+      const apply = (z: number, x: number, y: number) => {
+      const old = read(), next = Math.min(4, Math.max(0.2, z));
+      const horizontal = (desk.scrollLeft + x) * next / old - x;
+      const vertical = (desk.scrollTop + y) * next / old - y;
+      desk.style.setProperty("--writer-zoom", String(next));
+      desk.scrollLeft = horizontal; desk.scrollTop = vertical;
+      return next * 100;
+    };
+    const dist = (t: TouchList) => { const a = t.item(0), b = t.item(1); return a && b ? Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) : 0; };
+    const onStart = (e: TouchEvent) => { 
+      if (e.touches.length === 2) { 
+        setFitText(false);
+        start = dist(e.touches); 
+        base = read(); 
+      } 
+    };
+    const onMove = (e: TouchEvent) => { 
+      const a = e.touches.item(0), b = e.touches.item(1); 
+      if (a && b && start) { 
+        e.preventDefault(); 
+        const rect = desk.getBoundingClientRect(); 
+        apply(base * dist(e.touches) / start, (a.clientX + b.clientX) / 2 - rect.left, (a.clientY + b.clientY) / 2 - rect.top); 
+      } 
+    };
+    const onEnd = (e: TouchEvent) => { 
+      if (start && e.touches.length < 2) { 
+        start = 0; 
+        const v = scaleToDisplayZoom(read()); 
+        setSettings(s => ({ ...s, zoom: `${v}%` })); 
+      } 
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const rect = desk.getBoundingClientRect();
+      const mode = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? desk.clientHeight : 1;
+      const next = apply(read() * Math.exp(-e.deltaY * mode * 0.0015), e.clientX - rect.left, e.clientY - rect.top) / 100;
+      setFitText(false);
+      setSettings(s => ({ ...s, zoom: `${scaleToDisplayZoom(next)}%` }));
+    };
+    desk.addEventListener("touchstart", onStart, { passive: true });
+    desk.addEventListener("touchmove", onMove, { passive: false });
+    desk.addEventListener("touchend", onEnd);
+    desk.addEventListener("touchcancel", onEnd);
+    desk.addEventListener("wheel", onWheel, { passive: false });
+    return () => { desk.removeEventListener("touchstart", onStart); desk.removeEventListener("touchmove", onMove); desk.removeEventListener("touchend", onEnd); desk.removeEventListener("touchcancel", onEnd); desk.removeEventListener("wheel", onWheel); };
+  }, [editor, deskEl]);
+  const layoutOf = () => ({ headerText: settings.headerText, footerText: settings.footerText, pageNumbers: !!settings.pageNumbers, differentFirstPage: !!settings.differentFirstPage, margin: settings.margin, orientation: settings.orientation, pageNumberAlign: settings.pageNumberAlign, pageNumberFormat: settings.pageNumberFormat });
+  const loadWithLayout = (raw: string) => {
+    if (!editor) return;
+    const { html: body, layout } = extractLayout(raw);
+    editor.commands.setContent(sanitizeDocumentHtml(body));
+    if (layout) setSettings(s => ({ ...s, ...layout } as PageSettings));
+  };
+  // Enregistrement automatique en ligne (compte connecté), toutes les 20 secondes si le texte a changé
+  const lastCloud = useRef("");
+  useEffect(() => {
+    if (!editor) return;
+    const t = setInterval(async () => {
+      const html = attachLayout(editor.getHTML(), layoutOf());
+      if (!editor.getText().trim() || html === lastCloud.current) return;
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) { setCloudState("Hors ligne : non connecté"); return; }
+      setCloudState("Enregistrement en ligne…");
+      const row = { title: (docFileName || "Document BERSA").slice(0, 200), content: html, category: "general", word_count: editor.getText().trim().split(/\s+/).length };
+      const res = cloudId
+        ? await supabase.from("user_docs").update(row).eq("id", cloudId).select("id").single()
+        : await supabase.from("user_docs").insert({ ...row, user_id: u.user.id }).select("id").single();
+      if (res.error || !res.data) { setCloudState("Échec de l'enregistrement en ligne"); return; }
+      lastCloud.current = html; setCloudId(res.data.id);
+      setCloudState(`Enregistré en ligne à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`);
+    }, 20000);
+    return () => clearInterval(t);
+  }, [editor, cloudId, docFileName]);
+
+  const saveVersion = async () => {
+    if (!editor) return;
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) { toast.error("Connectez-vous pour garder des versions."); return; }
+    const stamp = new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const { error: e } = await supabase.from("user_docs").insert({ user_id: u.user.id, title: `${docFileName || "Document"} — version ${stamp}`.slice(0, 200), content: attachLayout(editor.getHTML(), layoutOf()), category: "version", word_count: editor.getText().trim().split(/\s+/).length });
+    if (e) toast.error("Version non enregistrée."); else toast.success("Version enregistrée");
+  };
+  const openVersions = async () => {
+    const { data, error: e } = await supabase.from("user_docs").select("id,title,created_at").eq("category", "version").order("created_at", { ascending: false }).limit(30);
+    if (e) { toast.error("Historique indisponible."); return; }
+    setVersions(data ?? []);
+  };
+  const restoreVersion = async (id: string) => {
+    if (!editor || !window.confirm("Remplacer le texte actuel par cette version ?")) return;
+    const { data } = await supabase.from("user_docs").select("content").eq("id", id).single();
+    if (data) { loadWithLayout(data.content); toast.success("Version restaurée"); setVersions(null); }
+  };
+  const exportPdf = async () => {
+    if (!editor) return;
+    try {
+      toast.info("Création du PDF…");
+      const { buildPdf } = await import("@/lib/pdf-export");
+      const blob = await buildPdf(editor.getHTML(), { marginPx: settings.margin === "Étroites" ? 48 : settings.margin === "Larges" ? 132 : 94, lineSpacing: Number(settings.lineSpacing) || 1.6, headerText: settings.headerText, footerText: settings.footerText, differentFirstPage: settings.differentFirstPage, pageNumbers: !!settings.pageNumbers, pageNumberAlign: settings.pageNumberAlign, pageNumberFormat: settings.pageNumberFormat, columns: settings.columns, landscape: settings.orientation === "Paysage" });
+      const name = `${(docFileName.trim() || "Document_BERSA").replace(/[^a-zA-Z0-9_\-]/g, "_")}.pdf`;
+      if (await pickAndWrite(blob, name, "Document PDF", { "application/pdf": [".pdf"] })) { toast.success("PDF enregistré."); return; }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success("PDF téléchargé.");
+    } catch { toast.error("Création du PDF impossible."); }
+  };
+
+  const handleOpenLocalFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editor) return;
+    try {
+      const result = await importDocumentFile(file);
+      editor.commands.setContent(result.html);
+      const cleanTitle = file.name.replace(/\.[^.]+$/, "");
+      setDocFileName(cleanTitle);
+      toast.success(`« ${file.name} » ouvert dans l'atelier pour retouche.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Impossible d'ouvrir ce document.");
+    } finally {
+      e.target.value = "";
+    }
+  };
 
   // Navigation fluide entre l'appel et la note
   const scrollToTarget = (targetId: string) => {
@@ -235,6 +451,8 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
   // Insertion dans le papier : disparaît d'un coup dès que le texte est inséré
   const insertIntoPaper = (mode: "auto" | "append" | "replace" = "auto") => {
     if (!editor || !generatedResponse.trim()) return;
+    const firstLine = generatedResponse.trim().split("\n")[0]!.replace(/^[#*\s]+|[*:]+$/g, "").trim();
+    if (firstLine && firstLine.length <= 110 && firstLine.split(/\s+/).length <= 16) setDocFileName(firstLine);
     const { from, to } = editor.state.selection;
     const selected = editor.state.doc.textBetween(from, to, "\n");
     const hasSelection = from !== to && selected.trim();
@@ -254,6 +472,21 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     setShowResultCard(false);
     setGeneratedResponse("");
   };
+  // Choix du dossier (ordinateur / Android Chrome) ; repli sur téléchargement direct
+  const pickAndWrite = async (blob: Blob, name: string, description: string, accept: Record<string, string[]>) => {
+    const picker = (window as any).showSaveFilePicker;
+    if (!picker) return false;
+    try {
+      const handle = await picker({ suggestedName: name, types: [{ description, accept }] });
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      return true;
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return true;
+      return false;
+    }
+  };
    // Enregistrement au format choisi vers le dossier du téléphone
   const handleSaveDocument = async () => {
     if (!editor) return;
@@ -268,8 +501,10 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
         landscape: settings.orientation === "Paysage",
         headerText: settings.headerText,
         footerText: settings.footerText,
-        pageNumbers: true,
+        pageNumbers: !!settings.pageNumbers,
+        differentFirstPage: !!settings.differentFirstPage,
       });
+      if (await pickAndWrite(blob, `${cleanName}.docx`, "Document Word", { "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"] })) { toast.success("Document Word enregistré."); return; }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -282,11 +517,7 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
       return;
     }
 
-    if (exportFormat === "pdf") {
-      window.print();
-      toast.success("Impression / enregistrement PDF déclenché.");
-      return;
-    }
+    if (exportFormat === "pdf") { await exportPdf(); return; }
 
     // Format TXT
     const textBlob = new Blob([editor.getText({ blockSeparator: "\n\n" })], { type: "text/plain;charset=utf-8" });
@@ -301,6 +532,13 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     toast.success(`Fichier texte enregistré pour votre dossier (${targetFolder}).`);
   };
 
+  const shareGeneratedText = async () => {
+    if (!generatedResponse) return;
+    try {
+      if (navigator.share) await navigator.share({ title: docFileName, text: generatedResponse });
+      else { await navigator.clipboard.writeText(generatedResponse); toast.success("Texte copié pour le partage."); }
+    } catch {}
+  };
   const copyGeneratedText = async () => {
     if (!generatedResponse) return;
     try {
@@ -313,14 +551,28 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
-  async function run(chosen = action, isRegenerate = false) {
+  async function run(chosen = action, isRegenerate = false, override?: string) {
     if (!editor || busy) return;
     const { from, to } = editor.state.selection;
     const selected = editor.state.doc.textBetween(from, to, "\n");
-    const rawText = isRegenerate
+    const rawText = override ? override : isRegenerate
       ? lastPrompt
       : (promptInput.trim() || writingTarget(editor.getText(), { from, to, text: selected }).trim());
     const text = rawText.trim();
+        // Génération automatique du titre à partir de la consigne posée
+    if (text && !override) {
+      const topic = text.split(/[\n.?!]/)[0]!
+        .replace(/^(s'il te pla[iî]t|stp)[,\s]*/i, "")
+        .replace(/^(peux-tu|pourrais-tu|merci de|je veux|je voudrais)\s+/i, "")
+        .replace(/^(r[ée]dige[rz]?(-moi)?|[ée]cri[st](-moi)?|fai[st](-moi)?|g[ée]n[èe]re[rz]?|donne(-moi)?|pr[ée]pare[rz]?|cr[ée]e[rz]?|produi[st])\s+/i, "")
+        .replace(/^(un|une|le|la|les|des|l')\s*/i, "")
+        .replace(/[«»"']/g, "").trim();
+      const words = topic.split(/\s+/).slice(0, 8).join(" ");
+      const generatedTitle = words ? words.charAt(0).toUpperCase() + words.slice(1) : "";
+      if (generatedTitle && (docFileName === "Mon_Document_BERSA" || !docFileName.trim())) {
+        setDocFileName(generatedTitle);
+      }
+    }
     if (!text) { toast.error("Écrivez votre consigne sur le papier ou dans le champ."); return; }
     if (files.some(file => file.type === "other")) { toast.info("Les pièces jointes non analysables ne sont pas transmises à l’Assistant."); }
 
@@ -331,9 +583,17 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     setLastPrompt(text);
     setPromptInput("");
 
-    try {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) throw new Error("Connectez-vous pour rédiger.");
+        try {
+      let { data } = await supabase.auth.getSession();
+      let session = data.session;
+      // Rafraîchissement automatique si le jeton est expiré
+      if (session && session.expires_at && session.expires_at * 1000 < Date.now() + 60000) {
+        const { data: refData } = await supabase.auth.refreshSession();
+        if (refData.session) session = refData.session;
+      }
+      if (!session) {
+        throw new Error("Veuillez vous connecter à votre compte BERSA pour utiliser l'Assistant.");
+      }
       setHistory(prev => [
         {
           id: String(Date.now()),
@@ -345,11 +605,17 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
       ]);
       const response = await fetch("/api/writer", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: chosen, text, attachments: files.filter(f => f.type !== "other") }),
       });
-      if (!response.ok) throw new Error(await response.text());
-      if (!response.body) throw new Error("Réponse vide.");
+           if (!response.ok) {
+        const errText = await response.text();
+        if (response.status === 401) {
+          throw new Error("Session expirée. Veuillez vous reconnecter à votre compte BERSA.");
+        }
+        throw new Error(errText);
+      }
+      if (!response.body) throw new Error("Réponse vide de l'Assistant.");
 
       let reply = "", failure = "";
       const parser = createParser({
@@ -373,7 +639,10 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
       }
       if (failure) throw new Error(failure);
       if (!reply.trim()) throw new Error("L’Assistant n’a pas produit de texte.");
-      toast.success("Texte généré ! Cliquez sur « Insérer dans le document ».");
+      if (isRegenerate) {
+        const t = reply.trim().split("\n")[0]!.replace(/^[#*\s]+/, "").slice(0, 90) || "Texte régénéré";
+        void supabase.from("user_docs").insert({ title: `${t} (version régénérée)`, category: "general", content: paragraphs(reply).map((n: any) => `<p>${String(n.content?.[0]?.text ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")}</p>`).join(""), word_count: reply.split(/\s+/).filter(Boolean).length });
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Assistant indisponible.";
       setError(message);
@@ -390,7 +659,7 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     const { data, error: issue } = await supabase.from("user_docs").insert({
       title: title.slice(0, 200),
       category: "general",
-      content: editor.getHTML(),
+      content: attachLayout(editor.getHTML(), layoutOf()),
       word_count: editor.getText().trim().split(/\s+/).filter(Boolean).length,
     }).select("id").single();
     if (issue || !data) { toast.error(issue?.message ?? "Sauvegarde impossible."); return; }
@@ -472,12 +741,7 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     if (!editor?.view?.dom) return;
     const dom = editor.view.dom as HTMLElement;
     const updatePages = () => {
-      const isMobile = window.innerWidth <= 640;
-      // Hauteur calibrée pour contenir une vraie page dense Word (~3 200 caractères)
-      const pageHeight = isMobile ? 780 : 1100;
-      const contentHeight = dom.scrollHeight || dom.clientHeight;
-      const count = Math.max(1, Math.ceil(contentHeight / pageHeight));
-      setTotalPages(count);
+      setTotalPages(Number(dom.dataset["pages"]) || 1);
     };
     updatePages();
     const observer = new ResizeObserver(updatePages);
@@ -489,84 +753,176 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
     };
   }, [editor]);
 
-  return (
-    <Frame>
+      const documentMenuActions = {
+    onSave: () => void handleSaveDocument(),
+    onSaveAs: () => setShowSaveModal(true),
+    onSaveAsWord: () => void (async () => {
+      if (!editor) return;
+      const { buildDocx } = await import("@/lib/docx-export");
+      const blob = await buildDocx(editor.getJSON() as any, { marginCm: settings.margin === "Étroites" ? 1.27 : settings.margin === "Larges" ? 3.5 : 2.5, lineSpacing: Number(settings.lineSpacing) || 1.6, landscape: settings.orientation === "Paysage", headerText: settings.headerText, footerText: settings.footerText, pageNumbers: !!settings.pageNumbers, pageNumberAlign: settings.pageNumberAlign, pageNumberFormat: settings.pageNumberFormat });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${docFileName || "Document_BERSA"}.docx`;
+      a.click();
+      toast.success("Document Word téléchargé.");
+    })(),
+    onSaveAsPdf: () => void exportPdf(),
+    onSaveAsTxt: () => void (async () => {
+      if (!editor) return;
+      const blob = new Blob([editor.getText()], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${docFileName || "Document_BERSA"}.txt`;
+      a.click();
+      toast.success("Fichier texte téléchargé.");
+    })(),
+    onSaveAsHtml: () => void (async () => {
+      if (!editor) return;
+      const blob = new Blob([editor.getHTML()], { type: "text/html" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${docFileName || "Document_BERSA"}.html`;
+      a.click();
+      toast.success("Page web HTML téléchargée.");
+    })(),
+    onNewDoc: () => {
+      if (!editor) return;
+      if (confirm("Créer un nouveau document vierge ? Les modifications non enregistrées seront effacées.")) {
+        editor.commands.setContent("<p></p>");
+        setDocFileName("Mon_Document_BERSA");
+        toast.success("Feuille blanche A4 prête.");
+      }
+    },
+    onOpenFile: () => openFileInput.current?.click(),
+    onRename: () => {
+      const next = prompt("Nouveau nom du document :", docFileName)?.trim();
+      if (next) { setDocFileName(next); toast.success("Document renommé."); }
+    },
+    onShare: async () => {
+      if (!editor) return;
+      const clean = (docFileName.trim() || "Document_BERSA").replace(/[^\p{L}\p{N}_\- ]/gu, "_");
+      try {
+        const { buildDocx } = await import("@/lib/docx-export");
+        const blob = await buildDocx(editor.getJSON() as any, { pageNumbers: !!settings.pageNumbers });
+        const file = new File([blob], `${clean}.docx`, { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ title: docFileName, files: [file] });
+          return;
+        }
+        if (navigator.share) { await navigator.share({ title: docFileName, text: editor.getText().slice(0, 4000) }); return; }
+        await navigator.clipboard.writeText(editor.getText());
+        toast.info("Texte copié : collez-le dans l'application de votre choix.");
+      } catch (e) {
+        if ((e as Error)?.name !== "AbortError") toast.error("Partage impossible sur cet appareil.");
+      }
+    },
+    onDuplicate: async () => {
+      if (!editor) return;
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) return;
+      await supabase.from("user_docs").insert({
+        user_id: data.user.id,
+        title: `${docFileName} (Copie)`,
+        content: attachLayout(editor.getHTML(), layoutOf()),
+        word_count: editor.getText().split(/\s+/).filter(Boolean).length,
+        category: "general"
+      });
+      toast.success("Copie enregistrée dans vos documents.");
+    },
+    onDelete: () => {
+      if (!editor) return;
+      if (confirm("Supprimer ce document de la feuille ? Cette action est définitive.")) {
+        editor.commands.setContent("<p></p>");
+        setDocFileName("Mon_Document_BERSA");
+        try { localStorage.removeItem("bersa-home-draft"); } catch {}
+        toast.success("Document supprimé.");
+      }
+    },
+  };
+
+    return (
+    <Frame minimal title={docFileName} onTitleChange={setDocFileName} documentActions={documentMenuActions}>
       <section aria-label="Assistant — éditeur Word" className={`home-editor mx-auto max-w-6xl sm:px-3 ${embedded ? "home-editor-embedded" : ""}`}>
-               {/* Barre au-dessus du papier : Mise en forme, Améliorer & Enregistrer */}
+       {/* Barre au-dessus du papier : Mise en forme, Améliorer & Enregistrer */}
         <div className="no-print mx-auto mb-1.5 flex w-full max-w-[794px] flex-col gap-1.5 px-1 sm:px-0 min-w-0">
           <div className="flex items-center justify-between rounded-lg border border-border/60 bg-card/90 px-2.5 py-1.5 text-xs backdrop-blur-sm">
             
-            {/* 1. Outils Word « Mise en forme » avec boutons Annuler et Rétablir */}
-            <div className="flex items-center gap-1">
+            {/* 1. Outils Word avec boutons Annuler et Rétablir agrandis et resserrés */}
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setRibbonOpen(!ribbonOpen)}
-                className="flex items-center gap-1.5 font-bold text-primary hover:text-primary/80 transition-colors"
-                title="Afficher ou masquer la mise en forme Word"
+                className="flex items-center gap-1 font-bold text-primary hover:text-primary/80 transition-colors text-xs"
+                title="Afficher ou masquer les outils"
               >
-                <PenTool className="h-4 w-4 text-primary" />
-                <span>Mise en forme</span>
+                <img
+                  src="/outils-icon.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-5 w-5 object-contain pointer-events-none"
+                />
+                <span className="inline">Outils</span>
                 {ribbonOpen ? (
-                  <ChevronUp className="h-5 w-5 text-primary stroke-[2.5]" />
+                  <ChevronUp className="h-4 w-4 text-primary stroke-[2.5]" />
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-primary stroke-[2.5]" />
+                  <ChevronDown className="h-4 w-4 text-primary stroke-[2.5]" />
                 )}
               </button>
 
-              <div className="flex items-center gap-0.5 border-l border-border/60 pl-1.5 ml-1">
+              <div className="flex items-center gap-0.5 border-l border-border/60 pl-1 ml-1">
                 <button
                   type="button"
                   onClick={() => editor?.chain().focus().undo().run()}
                   disabled={!editor?.can().undo()}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary disabled:opacity-30 transition"
+                  className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-foreground hover:text-primary disabled:opacity-30 transition shrink-0"
                   title="Annuler (Ctrl+Z)"
                   aria-label="Annuler"
                 >
-                  <Undo2 className="h-3.5 w-3.5" />
+                  <Undo2 className="h-4 w-4 stroke-[2.2]" />
                 </button>
                 <button
                   type="button"
                   onClick={() => editor?.chain().focus().redo().run()}
                   disabled={!editor?.can().redo()}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary disabled:opacity-30 transition"
+                  className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-foreground hover:text-primary disabled:opacity-30 transition shrink-0"
                   title="Rétablir (Ctrl+Y)"
                   aria-label="Rétablir"
                 >
-                  <Redo2 className="h-3.5 w-3.5" />
+                  <Redo2 className="h-4 w-4 stroke-[2.2]" />
                 </button>
               </div>
             </div> 
 
-            {/* Droite : Améliorer + Enregistrer */}
-            <div className="flex items-center gap-1.5">
-              {/* 2. Bouton « Améliorer » avec flèche plus grande */}
+            {/* Droite : Améliorer + Enregistrer (100 % visible sur tout écran sans déborder) */}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* 2. Bouton « Améliorer » */}
               <button
                 type="button"
                 onClick={() => setShowAssistantBar(!showAssistantBar)}
-                className="flex items-center gap-1.5 font-bold text-primary hover:text-primary/80 text-xs bg-primary/10 rounded-full px-2.5 py-1 transition-colors"
-                title="Fonctionnalités d'amélioration (Plan, développer, humaniser, résumer...)"
+                className="flex items-center gap-1 font-bold text-primary hover:text-primary/80 text-xs bg-primary/10 rounded-full px-2 py-1 transition-colors shrink-0"
+                title="Fonctionnalités d'amélioration"
               >
                 <Sparkles className="h-3.5 w-3.5 text-amber-500" />
                 <span>Améliorer</span>
                 {showAssistantBar ? (
-                  <ChevronUp className="h-4.5 w-4.5 text-primary stroke-[2.5]" />
+                  <ChevronUp className="h-4 w-4 text-primary stroke-[2.5]" />
                 ) : (
-                  <ChevronDown className="h-4.5 w-4.5 text-primary stroke-[2.5]" />
+                  <ChevronDown className="h-4 w-4 text-primary stroke-[2.5]" />
                 )}
               </button>
 
-              {/* 3. Bouton Enregistrer avec choix Word, PDF, dossier */}
+              {/* 3. Bouton Enregistrer BERSA entièrement visible et sans débordement */}
               <button
                 type="button"
                 onClick={() => setShowSaveModal(true)}
-                className="flex items-center gap-1 font-semibold text-primary hover:text-primary/80 text-xs bg-muted hover:bg-muted/80 rounded-full px-2 py-1 transition-colors"
+                className="flex items-center gap-1 font-semibold text-white text-xs bg-[#0a192f] hover:bg-[#0a192f]/90 rounded-full px-2.5 py-1.5 transition-colors shadow-sm shrink-0 whitespace-nowrap"
                 title="Enregistrer le document (Word, PDF, Texte)"
               >
-                <Save className="h-3.5 w-3.5 text-primary" />
-                <span className="hidden xs:inline">Enregistrer</span>
+                <Save className="h-3.5 w-3.5 text-white" />
+                <span className="text-xs font-semibold">Enregistrer</span>
               </button>
             </div>
-          </div>
+            </div>
 
           {/* Fonctions sous Améliorer (défilement horizontal sans déborder l'écran) */}
           {showAssistantBar && (
@@ -601,10 +957,16 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
               tab={tab}
               setTab={setTab}
               settings={settings}
-              setSettings={setSettings}
-              attach={() => fileInput.current?.click()}
+              setSettings={update => { setFitText(false); setSettings(update); }}
+              fitPaper={fitPaper}
+              attach={() => openFileInput.current?.click()}
               save={() => void save()}
               correct={() => { setAction("correct"); void run("correct"); }}
+              translate={(lang: string) => { if (!editor) return; const { from, to } = editor.state.selection; const t = editor.state.doc.textBetween(from, to, "\n").trim() || editor.getText().trim(); if (!t) { toast.info("Écrivez ou sélectionnez d'abord le texte à traduire."); return; } setAction("translate"); void run("translate", false, `Traduis fidèlement en ${lang} le texte suivant, sans commentaire, en gardant les paragraphes :\n\n${t}`); }}
+              exportPdf={() => void exportPdf()}
+              saveVersion={() => void saveVersion()}
+              openVersions={() => void openVersions()}
+              cloudState={cloudState}
             />
           </div>
         )}
@@ -649,13 +1011,19 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
         )}
         
         <input ref={fileInput} type="file" multiple className="hidden" onChange={e => { void addFiles(e.target.files); e.target.value = ""; }} />
+        <input
+  ref={openFileInput}
+  type="file"
+  accept=".docx,.doc,.pdf,.txt,.md,.csv,.html,.htm"
+  className="hidden"
+  onChange={handleOpenLocalFile}
+/>
 
         {tab === "Insérer" && (
           <p className="no-print px-2 py-1 text-[11px] text-muted-foreground">
             3 fichiers, 5 Mo chacun · Analyse : texte, PDF, Word (.docx), images PNG/JPEG/WebP.
           </p>
         )}
-
         {files.length > 0 && (
           <div className="no-print flex gap-1 overflow-x-auto py-1">
             {files.map((f, i) => (
@@ -669,8 +1037,16 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
 
+        {/* Desk d'écriture A4 rigide */}
         <div
-          className={`home-paper-desk a4-desk margin-${settings.margin} orientation-${settings.orientation} format-${settings.format} zoom-${settings.zoom.replace("%", "")}`}
+          ref={el => { deskRef.current = el; setDeskEl(el); }}
+          style={{ 
+            ["--writer-line" as string]: settings.lineSpacing || "1.15", 
+            ["--writer-margin-scale" as string]: settings.margin === "Étroites" ? "0.5" : settings.margin === "Larges" ? "1.3" : "1", 
+            ["--writer-page-color" as string]: settings.pageColor || "var(--paper)", 
+            ["--writer-zoom" as string]: String(displayZoomToScale(parseFloat(settings.zoom) || 100))
+          } as React.CSSProperties}
+          className={`bersa-writer-workspace home-paper-desk a4-desk margin-${settings.margin} orientation-${settings.orientation} format-${settings.format} zoom-${settings.zoom.replace("%", "")} cols-${settings.columns || 1}${settings.pageBorder ? " page-border" : ""}${settings.nightMode ? " writer-night" : ""}${settings.eyeCare ? " writer-eye-care" : ""}${settings.showComments === false ? " hide-comments" : ""}${settings.showRevisions === false ? " hide-revisions" : ""}${settings.showMarks ? " show-marks" : ""}`}
           onClick={e => {
             const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>("a.footnote-link, a.a4-footnote-backlink");
             if (anchor) {
@@ -682,80 +1058,55 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
             }
           }}
         >
-          {settings.ruler && <div className="no-print editor-ruler mx-auto max-w-[794px]">0 ┆ 1 ┆ 2 ┆ 3 ┆ 4 ┆ 5 ┆ 6 ┆ 7 ┆ 8 ┆ 9 ┆ 10</div>}
-          <EditorContent editor={editor} className="home-paper-content" />
-
-          {footnotes.length > 0 && (
-            <div className="a4-footnotes mx-auto max-w-[794px]" aria-label="Notes de bas de page">
-              <hr className="a4-footnotes-rule" />
-              <ol className="a4-footnotes-list">
-                {footnotes.map(fn => (
-                  <li key={fn.pos} id={`fn-${fn.number}`} className="a4-footnote-item scroll-mt-24">
-                    <a
-                      href={`#fnref-${fn.number}`}
-                      className="a4-footnote-backlink inline-flex items-center text-primary font-semibold hover:underline"
-                      title="Retourner à l'appel de note dans le texte"
-                      aria-label={`Retourner à l'appel de note ${fn.number}`}
-                      onClick={e => {
-                        e.preventDefault();
-                        scrollToTarget(`fnref-${fn.number}`);
-                      }}
-                    >
-                      <sup className="a4-footnote-number mr-1">{fn.number} ↩</sup>
-                    </a>
-                    <span className="a4-footnote-text">{fn.note}</span>
-                    <button
-                      type="button"
-                      className="no-print a4-footnote-action"
-                      aria-label={`Modifier la note ${fn.number}`}
-                      onClick={() => {
-                        const text = prompt("Modifier la note :", fn.note);
-                        if (text && editor) updateFootnote(editor, fn.pos, text);
-                      }}
-                    >
-                      Modifier
-                    </button>
-                    <button
-                      type="button"
-                      className="no-print a4-footnote-action"
-                      aria-label={`Supprimer la note ${fn.number}`}
-                      onClick={() => {
-                        if (editor) deleteFootnote(editor, fn.pos);
-                      }}
-                    >
-                      Supprimer
-                    </button>
-                  </li>
-                ))}
-              </ol>
+          {settings.ruler && (
+            <div className="bersa-writer-ruler no-print mx-auto mb-2" aria-hidden="true">
+              {Array.from({ length: 16 }).map((_, i) => (
+                <div key={i} className="bersa-writer-ruler-tick">
+                  <span>{i + 1}</span>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Pied de page numéroté automatique */}
-          <div className="no-print mx-auto mt-1 flex w-full max-w-[794px] items-center justify-between px-2 text-[11px] text-muted-foreground">
-            <span>{settings.format} · Marges {settings.margin}</span>
-            <span className="font-semibold text-primary">
-              Page 1 sur {totalPages} ({totalPages === 1 ? "1 feuille A4" : `${totalPages} feuilles A4`})
-            </span>
-          </div>
+          <WriterPaper editor={editor} settings={settings} setSettings={setSettings} footnotes={footnotes}>
+            <EditorContent editor={editor} className="home-paper-content" />
+          </WriterPaper>
+          {versions && (
+            <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-3 sm:items-center" onClick={() => setVersions(null)}>
+              <div className="w-full max-w-md rounded-xl bg-card p-4 shadow-xl" onClick={e => e.stopPropagation()}>
+                <div className="mb-2 flex items-center justify-between"><h3 className="font-semibold">Historique des versions</h3><Button size="sm" variant="ghost" onClick={() => setVersions(null)}>Fermer</Button></div>
+                {versions.length === 0 ? <p className="text-sm text-muted-foreground">Aucune version enregistrée.</p> : (
+                  <ul className="max-h-[60vh] space-y-1 overflow-y-auto">
+                    {versions.map(v => <li key={v.id}><button type="button" className="w-full rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => void restoreVersion(v.id)}>{v.title}</button></li>)}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        
         </div>
 
+          {!embedded && !assistantOpen && (
+            <button type="button" onClick={() => setAssistantOpen(true)} className="no-print fixed right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl" style={{ bottom: keyboardOffset > 0 ? `${keyboardOffset + 14}px` : "1.25rem" }} aria-label="Ouvrir l'assistant BERSA" title="Assistant BERSA"><Sparkles className="h-5 w-5" /></button>
+          )}
           {/* Boutons flottants persistants (mobile et ordinateur) style capsule, restant au-dessus du clavier */}
                   {/* Espace de commande & Résultats ChatGPT / WPS Word */}
         <div
-          className={`no-print home-editor-commands border border-border/80 bg-card/98 p-2.5 shadow-xl backdrop-blur-md transition-all duration-150 ease-out ${
+          hidden={!embedded && !assistantOpen}
+          className={`no-print home-editor-commands border border-border bg-background p-2 shadow-xl backdrop-blur-md transition-all duration-150 ease-out ${
             embedded
               ? "mx-auto w-full max-w-[794px] rounded-2xl mb-2"
-              : "fixed left-3 right-3 sm:left-auto sm:right-6 sm:w-[580px] z-50 rounded-2xl"
+              : "fixed left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-[min(768px,calc(100vw-3rem))] z-50 rounded-3xl"
           }`}
           style={{
             bottom: embedded ? undefined : keyboardOffset > 0 ? `${keyboardOffset + 14}px` : "1.25rem",
             transform: "translateZ(0)",
           }}
         >
+          <button type="button" onClick={() => setAssistantOpen(false)} className="absolute -top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow hover:text-primary" aria-label="Fermer l'assistant" title="Fermer l'assistant"><span className="text-lg font-bold leading-none">×</span></button>
           {/* FENÊTRE DE RÉSULTAT STYLE CHATGPT / WPS WORD AI */}
           {showResultCard && (generatedResponse || busy) && (
-            <div className="mb-2 rounded-xl border border-primary/25 bg-background/95 p-3 shadow-lg">
+            <div className="mb-2 rounded-xl border border-border bg-muted p-2.5 shadow-md">
               {/* En-tête du résultat */}
               <div className="mb-2 flex items-center justify-between border-b border-border/40 pb-1.5">
                 <span className="flex items-center gap-1.5 text-xs font-bold text-primary">
@@ -763,17 +1114,6 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
                   {busy ? "Génération en cours…" : "Texte généré par l'Assistant"}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  {generatedResponse && (
-                    <button
-                      type="button"
-                      onClick={() => void copyGeneratedText()}
-                      className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                      title="Copier le texte"
-                    >
-                      {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                      <span>{copied ? "Copié" : "Copier"}</span>
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => setShowResultCard(false)}
@@ -786,17 +1126,23 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
               </div>
 
               {/* Contenu du texte généré avec défilement pour grands textes */}
-              <div className="max-h-64 overflow-y-auto pr-1 text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed select-text scrollbar-thin">
+              <div className="max-h-72 overflow-y-auto pr-1 text-[15px] sm:text-base text-foreground whitespace-pre-wrap leading-relaxed select-text scrollbar-thin">
                 {generatedResponse || <span className="text-muted-foreground italic flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Rédaction de votre demande…</span>}
               </div>
               {/* BOUTON INSÉRER : apparaît d'un coût puis disparaît dès que le texte est inséré */}
               {generatedResponse && !busy && (
-                <div className="mt-2.5 flex items-center gap-2 border-t border-border/40 pt-2">
+                <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-border/40 pt-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => void shareGeneratedText()} className="h-8 rounded-lg text-xs gap-1 px-2.5" title="Partager">
+                    <Share2 className="h-3.5 w-3.5" /><span>Partager</span>
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void copyGeneratedText()} className="h-8 rounded-lg text-xs gap-1 px-2.5" title="Copier">
+                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}<span>{copied ? "Copié" : "Copier"}</span>
+                  </Button>
                   <Button
                     type="button"
                     size="sm"
                     onClick={() => insertIntoPaper("auto")}
-                    className="flex-1 h-8 rounded-lg bg-[#0a192f] text-white hover:bg-[#1e3a8a] text-xs font-bold gap-1.5 shadow"
+                    className="h-8 px-3 rounded-lg bg-[#0a192f] text-white hover:bg-[#1e3a8a] text-xs font-bold gap-1.5 shadow"
                   >
                     <FileDown className="h-4 w-4 text-amber-400" />
                     <span>Insérer</span>
@@ -818,18 +1164,18 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
                 )}
           {/* Badge du document joint visible dans l'item de demande façon ChatGPT */}
           {files.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 px-2 pb-1 pt-1 border-b border-border/40">
+            <div className="flex gap-1.5 overflow-x-auto px-1 pb-1.5 pt-1">
               {files.map((f, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1 rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[11px] font-semibold text-primary"
+                  className="relative flex shrink-0 items-center gap-2 rounded-xl border border-border bg-muted/70 py-1.5 pl-1.5 pr-5 text-[11px]"
                 >
-                  <FileText className="h-3 w-3 shrink-0" />
-                  <span className="max-w-[150px] truncate">{f.name}</span>
+                  {f.type === "image" ? <img src={`data:${(f as any).mediaType};base64,${f.content}`} alt="" className="h-9 w-9 rounded-lg object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground"><FileText className="h-4 w-4" /></span>}
+                  <span className="flex flex-col leading-tight"><span className="max-w-[120px] truncate font-semibold text-foreground">{f.name}</span><span className="text-[10px] uppercase text-muted-foreground">{f.name.split(".").pop()}</span></span>
                   <button
                     type="button"
                     onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
-                    className="ml-1 text-muted-foreground hover:text-destructive font-bold text-xs"
+                    className="absolute right-1 top-0.5 text-muted-foreground hover:text-destructive font-bold text-xs"
                     title="Retirer ce document"
                   >
                     ×
@@ -854,7 +1200,7 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
             }}
             placeholder="Écrivez votre consigne ou texte à rédiger..."
             rows={1}
-            className="w-full resize-none bg-transparent px-2 py-1 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none min-h-[38px] max-h-28"
+            className="w-full resize-none bg-transparent px-2 py-1.5 text-[15px] sm:text-base text-foreground placeholder:text-muted-foreground focus:outline-none min-h-[32px] max-h-28"
           />
 
           {/* Rangée inférieure : Trombone à gauche, Commandes & Quota à droite */}
@@ -923,13 +1269,12 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
 
               <Button
                 size="sm"
-                className="h-8 rounded-full px-3 text-xs font-medium shadow-md gap-1.5 bg-[#0a192f] text-white hover:bg-[#1e3a8a] shrink-0"
+                className="h-8 w-8 p-0 rounded-full bg-foreground text-background hover:bg-foreground/85 shrink-0"
                 onClick={() => void run()}
                 disabled={busy || recording || transcribing}
                 aria-label="Envoyer"
               >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline">{busy ? "Rédaction…" : "Envoyer"}</span>
+                {busy ? <Square className="h-3 w-3 fill-current" /> : <ArrowUp className="h-4 w-4 stroke-[2.5]" />}
               </Button>
 
               <div className="h-5 w-[1px] bg-border/60 mx-0.5" />
@@ -1070,6 +1415,62 @@ export function HomeEditor({ embedded = false }: { embedded?: boolean }) {
             </div>
           </div>
         )}  
+                {/* ========================================================= */}
+        {/* Barre d'état inférieure permanente BERSA WRITER (Word/WPS) */}
+        {/* ========================================================= */}
+        <div className="bersa-writer-statusbar no-print">
+          {/* À gauche : Page, Mots, Caractères */}
+          <div className="flex items-center gap-2 sm:gap-3 text-[11px]">
+            <span className="font-semibold text-primary">
+              Page 1 sur {totalPages}
+            </span>
+            <span className="text-muted-foreground">•</span>
+            <span>
+              {editor?.getText().trim() ? editor.getText().trim().split(/\s+/).filter(Boolean).length : 0} mots
+            </span>
+            <span className="hidden sm:inline text-muted-foreground">•</span>
+            <span className="hidden sm:inline">
+              {editor?.getText().length || 0} caractères
+            </span>
+          </div>
+
+          {/* À droite : Langue & Zoom interactif */}
+          <div className="flex items-center gap-2 sm:gap-3 text-[11px]">
+            <span className="font-medium text-muted-foreground hidden xs:inline">Français</span>
+            <span className="hidden xs:inline text-muted-foreground">•</span>
+            <div className="flex items-center gap-1 bg-muted/60 rounded px-1 py-0.5 border border-border/50">
+              <button
+                type="button"
+                className="px-1.5 py-0.5 font-bold hover:bg-background rounded transition"
+                onClick={() => {
+                  setFitText(false);
+                  const current = parseFloat(settings.zoom) || 100;
+                  const next = Math.max(20, current - 10);
+                  setSettings(s => ({ ...s, zoom: `${next}%` }));
+                }}
+                title="Réduire le zoom (-10%)"
+              >
+                −
+              </button>
+              <span className="w-10 text-center font-bold text-foreground">
+                {Math.round(parseFloat(settings.zoom) || 100)}%
+              </span>
+              <button
+                type="button"
+                className="px-1.5 py-0.5 font-bold hover:bg-background rounded transition"
+                onClick={() => {
+                  setFitText(false);
+                  const current = parseFloat(settings.zoom) || 100;
+                  const next = Math.min(400, current + 10);
+                  setSettings(s => ({ ...s, zoom: `${next}%` }));
+                }}
+                title="Agrandir le zoom (+10%)"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
     </Frame>
   );

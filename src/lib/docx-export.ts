@@ -2,7 +2,7 @@
 // and packs it in a ZIP archive (stored entries, CRC32) without external deps.
 
 export type JNode = { type: string; attrs?: any; content?: JNode[]; text?: string; marks?: { type: string; attrs?: any }[] };
-export type DocxOptions = { marginCm?: number; lineSpacing?: number; landscape?: boolean; headerText?: string; footerText?: string; pageNumbers?: boolean; title?: string };
+export type DocxOptions = { marginCm?: number; lineSpacing?: number; landscape?: boolean; headerText?: string; footerText?: string; pageNumbers?: boolean; pageNumberAlign?: "left" | "center" | "right" | undefined; pageNumberFormat?: "arabic" | "roman" | undefined; differentFirstPage?: boolean; title?: string };
 type Img = { id: string; name: string; data: Uint8Array; ext: string; w: number; h: number };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -12,7 +12,7 @@ let CRC: Uint32Array | null = null;
 export function crc32(data: Uint8Array) {
   if (!CRC) { CRC = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; CRC[n] = c >>> 0; } }
   let c = 0xffffffff;
-  for (let i = 0; i < data.length; i++) c = CRC[(c ^ data[i]!) & 0xff]! ^ (c >>> 8);
+  for (const byte of data) c = (CRC[(c ^ byte) & 0xff] ?? 0) ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
@@ -50,7 +50,7 @@ const ptSize = (s?: string) => { if (!s) return 0; const n = parseFloat(s); if (
 function runs(nodes: JNode[] = []): string {
   return nodes.map(n => {
     if (n.type === "hardBreak") return "<w:r><w:br/></w:r>";
-    if (n.type === "footnote") return `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t>${esc(String(n.attrs?.number ?? "*"))}</w:t></w:r>`;
+    if (n.type === "footnote") return `<w:r><w:footnoteReference w:id="${Number(n.attrs?.number) || 1}"/></w:r>`;
     if (n.type !== "text" || !n.text) return "";
     let pr = ""; let link = "";
     for (const m of n.marks ?? []) {
@@ -75,7 +75,10 @@ function runs(nodes: JNode[] = []): string {
 
 function para(n: JNode, extra = "", style = ""): string {
   const al = n.attrs?.textAlign; const jc = al === "center" ? "center" : al === "right" ? "right" : al === "justify" ? "both" : "";
-  const pPr = `${style ? `<w:pStyle w:val="${style}"/>` : ""}${extra}${jc ? `<w:jc w:val="${jc}"/>` : ""}`;
+  const indent = Number(n.attrs?.indent) || 0;
+  const spacing = n.attrs?.paragraphSpacing ? Math.round(parseFloat(n.attrs.paragraphSpacing) * 20) : null;
+  const line = n.attrs?.paragraphLine ? Math.round(Number(n.attrs.paragraphLine) * 240) : null;
+  const pPr = `${style ? `<w:pStyle w:val="${style}"/>` : ""}${extra}${jc ? `<w:jc w:val="${jc}"/>` : ""}${indent ? `<w:ind w:left="${Math.round(indent * 1.25 * 567)}"/>` : ""}${spacing !== null || line !== null ? `<w:spacing${spacing !== null ? ` w:after="${spacing}"` : ""}${line !== null ? ` w:line="${line}" w:lineRule="auto"` : ""}/>` : ""}${n.attrs?.keepTogether ? '<w:keepLines/>' : ""}`;
   return `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ""}${runs(n.content)}</w:p>`;
 }
 
@@ -121,8 +124,12 @@ async function loadImage(src: string, idx: number): Promise<Img | null> {
     let data = new Uint8Array(await blob.arrayBuffer());
     const bmp = await createImageBitmap(blob);
     if (!["png", "jpg", "gif"].includes(ext)) { // convert webp/svg etc. to PNG
-      const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height; c.getContext("2d")!.drawImage(bmp, 0, 0);
-      data = new Uint8Array(await (await new Promise<Blob>(r => c.toBlob(b => r(b!), "image/png"))).arrayBuffer()); ext = "png";
+      const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+      const context = c.getContext("2d"); if (!context) return null;
+      context.drawImage(bmp, 0, 0);
+      const converted = await new Promise<Blob | null>(resolve => c.toBlob(resolve, "image/png"));
+      if (!converted) return null;
+      data = new Uint8Array(await converted.arrayBuffer()); ext = "png";
     }
     return { id: `rIdImg${idx + 1}`, name: src, data, ext, w: bmp.width, h: bmp.height };
   } catch { return null; }
@@ -138,21 +145,24 @@ export function buildDocxBytes(doc: JNode, opts: DocxOptions = {}, imgs: Img[] =
   const W = 11906, H = 16838; const m = Math.round((opts.marginCm ?? 2.5) * 567);
   const [pw, ph] = opts.landscape ? [H, W] : [W, H];
   const line = Math.round((opts.lineSpacing ?? 1.6) * 240);
+  const notes: JNode[] = [];
+  const collectNotes = (n: JNode) => { if (n.type === "footnote") notes.push(n); n.content?.forEach(collectNotes); }; collectNotes(doc);
   const body = blocks(doc.content, { imgs, widthTwips: pw - 2 * m }) || "<w:p/>";
   const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
   const hasHeader = !!opts.headerText; const hasFooter = !!opts.footerText || opts.pageNumbers !== false;
-  const sect = `<w:sectPr>${hasHeader ? '<w:headerReference w:type="default" r:id="rIdHeader"/>' : ""}${hasFooter ? '<w:footerReference w:type="default" r:id="rIdFooter"/>' : ""}<w:pgSz w:w="${pw}" w:h="${ph}"${opts.landscape ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr>`;
+  const sect = `<w:sectPr>${hasHeader ? '<w:headerReference w:type="default" r:id="rIdHeader"/>' : ""}${hasFooter ? '<w:footerReference w:type="default" r:id="rIdFooter"/>' : ""}${opts.differentFirstPage ? "<w:titlePg/>" : ""}<w:pgSz w:w="${pw}" w:h="${ph}"${opts.landscape ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr>`;
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${NS}><w:body>${body}${sect}</w:body></w:document>`;
-  const pageField = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const pageField = `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE${opts.pageNumberFormat === "roman" ? " \\* roman" : ""} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
+  const footnotes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:footnotes ${NS}><w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>${notes.map(n => `<w:footnote w:id="${Number(n.attrs?.number) || 1}"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> ${esc(String(n.attrs?.note || ""))}</w:t></w:r></w:p></w:footnote>`).join("")}</w:footnotes>`;
   const header = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ${NS}><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t xml:space="preserve">${esc(opts.headerText ?? "")}</w:t></w:r></w:p></w:hdr>`;
-  const footer = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ${NS}><w:p><w:pPr><w:jc w:val="center"/></w:pPr>${opts.footerText ? `<w:r><w:t xml:space="preserve">${esc(opts.footerText)}  </w:t></w:r>` : ""}${opts.pageNumbers !== false ? pageField : ""}</w:p></w:ftr>`;
+  const footer = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ${NS}>${opts.footerText ? `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t xml:space="preserve">${esc(opts.footerText)}</w:t></w:r></w:p>` : ""}${opts.pageNumbers !== false ? `<w:p><w:pPr><w:jc w:val="${opts.pageNumberAlign === "left" ? "left" : opts.pageNumberAlign === "right" ? "right" : "center"}"/></w:pPr>${pageField}</w:p>` : (opts.footerText ? "" : "<w:p/>")}</w:ftr>`;
   const hStyle = (i: number, sz: number) => `<w:style w:type="paragraph" w:styleId="Heading${i}"><w:name w:val="heading ${i}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:outlineLvl w:val="${i - 1}"/></w:pPr><w:rPr><w:b/><w:color w:val="1E3A8A"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:style>`;
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="26"/><w:szCs w:val="26"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="${line}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>${hStyle(1, 36)}${hStyle(2, 30)}${hStyle(3, 27)}</w:styles>`;
   const lvls = (fmt: string) => Array.from({ length: 9 }, (_, i) => `<w:lvl w:ilvl="${i}"><w:start w:val="1"/><w:numFmt w:val="${fmt}"/><w:lvlText w:val="${fmt === "bullet" ? (i % 2 ? "◦" : "•") : `%${i + 1}.`}"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${720 * (i + 1)}" w:hanging="360"/></w:pPr></w:lvl>`).join("");
   const numbering = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="0">${lvls("bullet")}</w:abstractNum><w:abstractNum w:abstractNumId="1">${lvls("decimal")}</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num></w:numbering>`;
   const R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="${R}/styles" Target="styles.xml"/><Relationship Id="rIdNum" Type="${R}/numbering" Target="numbering.xml"/>${hasHeader ? `<Relationship Id="rIdHeader" Type="${R}/header" Target="header1.xml"/>` : ""}${hasFooter ? `<Relationship Id="rIdFooter" Type="${R}/footer" Target="footer1.xml"/>` : ""}${imgs.map(i => `<Relationship Id="${i.id}" Type="${R}/image" Target="media/${i.id}.${i.ext}"/>`).join("")}</Relationships>`;
-  const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>${hasHeader ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' : ""}${hasFooter ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ""}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="${R}/styles" Target="styles.xml"/><Relationship Id="rIdNum" Type="${R}/numbering" Target="numbering.xml"/>${hasHeader ? `<Relationship Id="rIdHeader" Type="${R}/header" Target="header1.xml"/>` : ""}${hasFooter ? `<Relationship Id="rIdFooter" Type="${R}/footer" Target="footer1.xml"/>` : ""}${notes.length ? `<Relationship Id="rIdFootnotes" Type="${R}/footnotes" Target="footnotes.xml"/>` : ""}${imgs.map(i => `<Relationship Id="${i.id}" Type="${R}/image" Target="media/${i.id}.${i.ext}"/>`).join("")}</Relationships>`;
+  const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>${hasHeader ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' : ""}${hasFooter ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ""}${notes.length ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : ""}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`;
   const root = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`;
   const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${esc(opts.title ?? "Document BERSA")}</dc:title><dc:creator>BERSA</dc:creator></cp:coreProperties>`;
   const files = [
@@ -165,6 +175,7 @@ export function buildDocxBytes(doc: JNode, opts: DocxOptions = {}, imgs: Img[] =
     { name: "word/_rels/document.xml.rels", data: enc.encode(rels) },
     ...(hasHeader ? [{ name: "word/header1.xml", data: enc.encode(header) }] : []),
     ...(hasFooter ? [{ name: "word/footer1.xml", data: enc.encode(footer) }] : []),
+    ...(notes.length ? [{ name: "word/footnotes.xml", data: enc.encode(footnotes) }] : []),
     ...imgs.map(i => ({ name: `word/media/${i.id}.${i.ext}`, data: i.data })),
   ];
   return zip(files);
